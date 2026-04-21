@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Game — Test Suite</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'SF Mono', 'Fira Code', monospace; background: #111; color: #eee; padding: 20px; }
+    h1 { margin-bottom: 10px; font-size: 18px; }
+    #summary { margin-bottom: 16px; font-size: 14px; padding: 8px 12px; border-radius: 6px; }
+    .pass-summary { background: #1a3a1a; color: #34c759; }
+    .fail-summary { background: #3a1a1a; color: #ff3b30; }
+    .suite { margin-bottom: 12px; }
+    .suite-name { font-weight: bold; font-size: 13px; color: #8e8e93; margin-bottom: 4px; cursor: pointer; }
+    .suite-name:hover { color: #ccc; }
+    .test { font-size: 12px; padding: 2px 0 2px 16px; }
+    .test.pass { color: #34c759; }
+    .test.fail { color: #ff3b30; }
+    .test.pass::before { content: "  "; }
+    .test.fail::before { content: "  "; }
+    .error-detail { color: #ff6b6b; font-size: 11px; padding-left: 32px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Trading Game — Test Suite</h1>
+  <div id="summary"></div>
+  <div id="results"></div>
+  <script type="module" src="tests.js"></script>
+</body>
+</html>

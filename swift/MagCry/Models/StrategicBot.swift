@@ -20,7 +20,7 @@ private let stratMaxAdaptShift = 15       // Higher cap
 /// - Adapts aggressively after just 2 same-direction trades.
 final class StrategicBot: Bot {
     let playerID: String
-    let tracker = BotTracker()
+    let tracker: BotTracker
     private let rng: GameRNG
     private var phaseTradeCount = 0
     private var lastPhase: Phase?
@@ -28,6 +28,7 @@ final class StrategicBot: Bot {
     init(playerID: String, rng: GameRNG) {
         self.playerID = playerID
         self.rng = rng
+        self.tracker = BotTracker(rng: rng)
     }
 
     // MARK: - Private
@@ -80,7 +81,8 @@ final class StrategicBot: Bot {
         let mid = bluffMid(state: state)
         let noise = rng.nextDouble() - 0.5  // [-0.5, 0.5]
         let adapt = Double(adaptationShift(requester: requester))
-        let adjusted = mid + noise + adapt
+        let direct = Double(tracker.directShiftFor(requester ?? ""))
+        let adjusted = mid + noise + adapt + direct
         let bid = Int(adjusted.rounded()) - 1
         return Quote(bid: bid, ask: bid + 2)
     }

@@ -14,13 +14,14 @@ private let maxAdaptShift = 10
 /// Adaptation: if enabled, shifts quotes against a player's trading direction.
 final class SimpleBot: Bot {
     let playerID: String
-    let tracker = BotTracker()
+    let tracker: BotTracker
     private let rng: GameRNG
     private let adaptationThreshold: Int?  // nil = Easy (never adapt), Int = Medium
 
     init(playerID: String, rng: GameRNG, adaptationThreshold: Int? = nil) {
         self.playerID = playerID
         self.rng = rng
+        self.tracker = BotTracker(rng: rng)
         self.adaptationThreshold = adaptationThreshold
     }
 
@@ -56,7 +57,8 @@ final class SimpleBot: Bot {
         let ev = expectedMid(state: state)
         let noise = Double(rng.nextInt(in: -noiseRange...noiseRange))
         let adapt = Double(adaptationShift(requester: requester))
-        let mid = ev + noise + adapt
+        let direct = Double(tracker.directShiftFor(requester ?? ""))
+        let mid = ev + noise + adapt + direct
         let bid = Int(mid.rounded()) - 1
         return Quote(bid: bid, ask: bid + 2)
     }

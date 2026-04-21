@@ -109,6 +109,186 @@ final class BotTests: XCTestCase {
         XCTAssertEqual(tracker.opponentSameDirectionStreak("Ghost"), 0)
     }
 
+    // MARK: - BotTracker: Direct Shifts (Anti-Spam)
+
+    func testDirectShiftZeroByDefault() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        XCTAssertEqual(tracker.directShiftFor("You"), 0)
+    }
+
+    func testDirectShiftIncreasesWhenOpponentBuys() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        let shift = tracker.directShiftFor("You")
+        XCTAssertGreaterThanOrEqual(shift, 2)
+        XCTAssertLessThanOrEqual(shift, 6)
+    }
+
+    func testDirectShiftDecreasesWhenOpponentSells() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        let shift = tracker.directShiftFor("You")
+        XCTAssertGreaterThanOrEqual(shift, -6)
+        XCTAssertLessThanOrEqual(shift, -2)
+    }
+
+    func testDirectShiftAccumulatesFromMultipleBuys() {
+        let tracker = BotTracker(rng: GameRNG(seed: 42))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        let shift = tracker.directShiftFor("You")
+        // 3 buys, each 2-6: total should be 6-18
+        XCTAssertGreaterThanOrEqual(shift, 6)
+        XCTAssertLessThanOrEqual(shift, 18)
+    }
+
+    func testDirectShiftAccumulatesFromMultipleSells() {
+        let tracker = BotTracker(rng: GameRNG(seed: 42))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        let shift = tracker.directShiftFor("You")
+        // 3 sells, each -2 to -6: total should be -18 to -6
+        XCTAssertGreaterThanOrEqual(shift, -18)
+        XCTAssertLessThanOrEqual(shift, -6)
+    }
+
+    func testDirectShiftPerPlayerIndependent() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        tracker.recordDirectTrade(opponent: "Bob", opponentBought: false)
+        XCTAssertGreaterThan(tracker.directShiftFor("You"), 0)
+        XCTAssertLessThan(tracker.directShiftFor("Bob"), 0)
+    }
+
+    func testDecayDirectShiftsReducesByTwo() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        // Force a known shift: buy 3 times (will accumulate positive)
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        let shiftBefore = tracker.directShiftFor("You")
+        XCTAssertGreaterThanOrEqual(shiftBefore, 2)
+
+        tracker.decayDirectShifts()
+        let shiftAfter = tracker.directShiftFor("You")
+        XCTAssertEqual(shiftAfter, max(0, shiftBefore - 2))
+    }
+
+    func testDecayDirectShiftsNeverCrossesZero() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        // One small trade (shift 2-6), then decay multiple times
+        tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        for _ in 0..<10 {
+            tracker.decayDirectShifts()
+        }
+        XCTAssertGreaterThanOrEqual(tracker.directShiftFor("You"), 0)
+    }
+
+    func testDecayDirectShiftsNegativeNeverCrossesZero() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        for _ in 0..<10 {
+            tracker.decayDirectShifts()
+        }
+        XCTAssertLessThanOrEqual(tracker.directShiftFor("You"), 0)
+    }
+
+    func testPassWithMarketReadBullishShiftsUp() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        // Make the opponent bullish (4 buys → bullish direction)
+        for _ in 0..<4 {
+            tracker.recordTrade(buyer: "You", seller: "Alice", playerOfInterest: "You")
+        }
+        XCTAssertEqual(tracker.opponentDirection("You"), "bullish")
+
+        tracker.recordPassWithMarketRead(opponent: "You")
+        let shift = tracker.directShiftFor("You")
+        // Bullish → positive shift of 1-2
+        XCTAssertGreaterThanOrEqual(shift, 1)
+        XCTAssertLessThanOrEqual(shift, 2)
+    }
+
+    func testPassWithMarketReadBearishShiftsDown() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        // Make the opponent bearish (4 sells)
+        for _ in 0..<4 {
+            tracker.recordTrade(buyer: "Alice", seller: "You", playerOfInterest: "You")
+        }
+        XCTAssertEqual(tracker.opponentDirection("You"), "bearish")
+
+        tracker.recordPassWithMarketRead(opponent: "You")
+        let shift = tracker.directShiftFor("You")
+        // Bearish → negative shift of -1 to -2
+        XCTAssertGreaterThanOrEqual(shift, -2)
+        XCTAssertLessThanOrEqual(shift, -1)
+    }
+
+    func testPassWithMarketReadNeutralNoShift() {
+        let tracker = BotTracker(rng: GameRNG(seed: 1))
+        // No trades → neutral
+        tracker.recordPassWithMarketRead(opponent: "You")
+        XCTAssertEqual(tracker.directShiftFor("You"), 0)
+    }
+
+    func testDirectShiftAffectsSimpleBotQuote() {
+        let bot = SimpleBot(playerID: "Alice", rng: GameRNG(seed: 1))
+        let state = makeSimpleState(botCard: 7)
+
+        let qBefore = bot.getQuote(state: state, requester: "You")
+
+        // Simulate 3 buys from "You" → positive shift
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+
+        let qAfter = bot.getQuote(state: state, requester: "You")
+        // Prices should have shifted up (more expensive for buyer)
+        XCTAssertGreaterThan(qAfter.bid, qBefore.bid)
+    }
+
+    func testDirectShiftAffectsStrategicBotQuote() {
+        let bot = StrategicBot(playerID: "Bob", rng: GameRNG(seed: 1))
+        let state = makeStrategicState(botCard: 7)
+
+        let qBefore = bot.getQuote(state: state, requester: "You")
+
+        // Simulate 3 sells from "You" → negative shift
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: false)
+
+        let qAfter = bot.getQuote(state: state, requester: "You")
+        // Prices should have shifted down (worse for seller)
+        XCTAssertLessThan(qAfter.bid, qBefore.bid)
+    }
+
+    func testDirectShiftDoesNotAffectOtherRequesters() {
+        let bot = SimpleBot(playerID: "Alice", rng: GameRNG(seed: 1))
+        let state = makeSimpleState(botCard: 7)
+
+        // Shift only applies to "You"
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+
+        let qForYou = bot.getQuote(state: state, requester: "You")
+        let qForBob = bot.getQuote(state: state, requester: "Bob")
+        // Bob should get a lower price (no shift)
+        XCTAssertGreaterThan(qForYou.bid, qForBob.bid)
+    }
+
+    func testDirectShiftSpreadAlways2() {
+        let bot = SimpleBot(playerID: "Alice", rng: GameRNG(seed: 1))
+        let state = makeSimpleState(botCard: 7)
+
+        for _ in 0..<5 {
+            bot.tracker.recordDirectTrade(opponent: "You", opponentBought: true)
+        }
+
+        let q = bot.getQuote(state: state, requester: "You")
+        XCTAssertEqual(q.ask - q.bid, 2)
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // MARK: - SimpleBot: Quotes
     // ═══════════════════════════════════════════════════════════════════════

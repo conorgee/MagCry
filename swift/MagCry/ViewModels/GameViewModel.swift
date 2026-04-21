@@ -49,6 +49,9 @@ final class GameViewModel {
     /// Controls the History sheet presentation.
     var showHistory: Bool = false
 
+    /// Show quit confirmation alert.
+    var showQuitAlert: Bool = false
+
     // Log
     private(set) var log: [LogEntry] = []
 
@@ -56,22 +59,42 @@ final class GameViewModel {
     private(set) var scores: [String: Int] = [:]
     private(set) var finalTotal: Int = 0
 
+    // Tutorial
+    private(set) var tutorialManager: TutorialManager?
+    private(set) var isTutorial: Bool = false
+
+    // Persistent stats
+    var scoreStore: ScoreStore = ScoreStore()
+
     // MARK: - Private
 
     private var rng: GameRNG!
     private var quoteContinuation: CheckedContinuation<Quote, Never>?
     private var nextContinuation: CheckedContinuation<Void, Never>?
     private var windDownContinuation: CheckedContinuation<Void, Never>?
+    private var gameTask: Task<Void, Never>?
 
     // Constants
     static let humanID = "You"
     static let botNames = ["Alice", "Bob", "Carol", "Dave"]
+
+    // Tutorial constants
+    private static let tutorialPrivateCards: [String: Int] = [
+        "You": 12, "Alice": 5, "Bob": 8, "Carol": 7, "Dave": 6
+    ]
+    private static let tutorialCentralCards = [10, 11, 9]
+    // Total = 12 + 5 + 8 + 7 + 6 + 10 + 11 + 9 = 68
+
+    private static let tutorialAliceQuote = Quote(bid: 59, ask: 61)
+    private static let tutorialBobQuote = Quote(bid: 70, ask: 72)
 
     // ═══════════════════════════════════════════════════════════════════════
     // MARK: - Game Setup
     // ═══════════════════════════════════════════════════════════════════════
 
     func startGame(difficulty: Difficulty) {
+        self.tutorialManager = nil
+        self.isTutorial = false
         self.difficulty = difficulty
         self.rng = GameRNG()
 
@@ -99,7 +122,39 @@ final class GameViewModel {
         self.screen = .playing
 
         // Launch the game loop
-        Task { await runGame() }
+        gameTask = Task { await runGame() }
+    }
+
+    /// Start a scripted tutorial — fixed cards, fixed quotes, no randomness.
+    func startTutorial() {
+        self.isTutorial = true
+        self.difficulty = .easy
+        self.rng = GameRNG()
+
+        // Create simple bots (they won't actually be used for quotes, but needed for structure)
+        self.bots = Self.makeBots(difficulty: .easy, rng: rng)
+        self.botMap = Dictionary(uniqueKeysWithValues: bots.map { ($0.playerID, $0) })
+
+        // Fixed predetermined cards
+        let playerIDs = [Self.humanID] + Self.botNames
+        self.gameState = GameState(
+            playerIDs: playerIDs,
+            privateCards: Self.tutorialPrivateCards,
+            centralCards: Self.tutorialCentralCards
+        )
+
+        self.playerCard = Self.tutorialPrivateCards[Self.humanID]!
+        self.activeQuote = nil
+        self.lastActionResult = nil
+        self.log = []
+        self.scores = [:]
+        self.finalTotal = 0
+        self.tutorialManager = TutorialManager()
+
+        self.screen = .playing
+
+        // Launch the scripted tutorial loop
+        gameTask = Task { await runTutorial() }
     }
 
     private static func makeBots(difficulty: Difficulty, rng: GameRNG) -> [any Bot] {
@@ -119,6 +174,35 @@ final class GameViewModel {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // MARK: - Quit Game
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Cancel the running game/tutorial and return to menu.
+    func quitGame() {
+        // Cancel the game task
+        gameTask?.cancel()
+        gameTask = nil
+
+        // Resume any stuck continuations so they don't leak
+        quoteContinuation?.resume(returning: Quote(bid: 0, ask: 2))
+        quoteContinuation = nil
+        nextContinuation?.resume()
+        nextContinuation = nil
+        windDownContinuation?.resume()
+        windDownContinuation = nil
+
+        // Reset state
+        tutorialManager = nil
+        isTutorial = false
+        gameState = nil
+        activeQuote = nil
+        lastActionResult = nil
+        playingState = .idle
+
+        screen = .mainMenu
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // MARK: - Main Game Loop
     // ═══════════════════════════════════════════════════════════════════════
 
@@ -128,6 +212,9 @@ final class GameViewModel {
         let phases: [Phase] = [.open, .reveal1, .reveal2, .reveal3]
 
         for phase in phases {
+            // Check for cancellation at each phase boundary
+            if Task.isCancelled { return }
+
             state.phase = phase
 
             // Reveal central card for reveal phases
@@ -141,6 +228,7 @@ final class GameViewModel {
                     // Notify bots of phase change
                     for bot in bots {
                         bot.onPhaseChange(state: state)
+                        bot.tracker.decayDirectShifts()
                     }
                 }
             }
@@ -149,23 +237,43 @@ final class GameViewModel {
             await runPhase(state: state)
         }
 
+        if Task.isCancelled { return }
+
         // Settlement
         state.phase = .settle
         self.finalTotal = state.finalTotal()
         self.scores = settle(state: state)
+
+        // Record stats (skip tutorials)
+        if !isTutorial {
+            let sorted = leaderboard(scores: scores)
+            let playerPnL = scores[Self.humanID] ?? 0
+            let rank = (sorted.firstIndex(where: { $0.0 == Self.humanID }) ?? sorted.count) + 1
+            let playerTrades = state.trades.filter {
+                $0.buyer == Self.humanID || $0.seller == Self.humanID
+            }.count
+            scoreStore.record(difficulty: difficulty, pnl: playerPnL, rank: rank, tradeCount: playerTrades)
+        }
+
         self.screen = .settlement
     }
 
     /// Run one complete trading phase: bots ask → human trades → wind-down.
     private func runPhase(state: GameState) async {
+        if Task.isCancelled { return }
+
         // Phase A: Bots ask human for prices (0-2)
         _ = await runBotsAskHuman(state: state, askRange: 0...2)
+
+        if Task.isCancelled { return }
 
         // Phase B: Human trades freely until they tap "Next"
         playingState = .playerTurn
         activeQuote = nil
         lastActionResult = nil
         await awaitPlayerNext()
+
+        if Task.isCancelled { return }
 
         // Phase C: Wind-down
         await runWindDown(state: state)
@@ -182,6 +290,8 @@ final class GameViewModel {
         let askers = rng.sample(bots, count: min(nAskers, bots.count))
 
         for bot in askers {
+            if Task.isCancelled { return 0 }
+
             addLog(.botAsksYou(botName: bot.playerID))
 
             // Adaptation warning
@@ -195,6 +305,8 @@ final class GameViewModel {
             playingState = .botAsksYou(botName: bot.playerID)
             let quote = await awaitUserQuote()
 
+            if Task.isCancelled { return 0 }
+
             // Bot evaluates the human's quote
             let decision = bot.decideOnQuote(state: state, quoter: Self.humanID, quote: quote)
 
@@ -204,6 +316,8 @@ final class GameViewModel {
                     try? executeTradeDirectly(
                         state: state, buyer: bot.playerID, seller: Self.humanID, price: quote.ask)
                     recordTradeForAllBots(buyer: bot.playerID, seller: Self.humanID)
+                    // Bot bought from human → human sold → opponentBought=false
+                    bot.tracker.recordDirectTrade(opponent: Self.humanID, opponentBought: false)
                     let msg = "buys at \(quote.ask)"
                     addLog(.botBuys(botName: bot.playerID, price: quote.ask))
                     playingState = .botDecided(botName: bot.playerID, action: msg)
@@ -212,6 +326,8 @@ final class GameViewModel {
                     try? executeTradeDirectly(
                         state: state, buyer: Self.humanID, seller: bot.playerID, price: quote.bid)
                     recordTradeForAllBots(buyer: Self.humanID, seller: bot.playerID)
+                    // Bot sold to human → human bought → opponentBought=true
+                    bot.tracker.recordDirectTrade(opponent: Self.humanID, opponentBought: true)
                     let msg = "sells at \(quote.bid)"
                     addLog(.botSells(botName: bot.playerID, price: quote.bid))
                     playingState = .botDecided(botName: bot.playerID, action: msg)
@@ -235,6 +351,8 @@ final class GameViewModel {
         addLog(.info(message: "Wind-down: \(nRounds) round(s)...", important: false))
 
         for round in 1...nRounds {
+            if Task.isCancelled { return }
+
             addLog(.info(message: "Round \(round)/\(nRounds)", important: false))
 
             playingState = .botsTrading
@@ -251,6 +369,8 @@ final class GameViewModel {
                 addLog(.info(message: "Quick -- you can trade back.", important: true))
                 await awaitWindDownContinue()
             }
+
+            if Task.isCancelled { return }
 
             // Bot-to-bot trading
             playingState = .botsTrading
@@ -288,29 +408,135 @@ final class GameViewModel {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // MARK: - Scripted Tutorial Loop
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Runs the fully scripted tutorial across all 4 phases.
+    /// No randomness, no wind-down, no bot-to-bot trading.
+    /// Phase flow: Open → Reveal1 → Reveal2 (Carol asks you) → Reveal3 → Settlement.
+    private func runTutorial() async {
+        guard let state = gameState else { return }
+
+        // ── Phase: Open Trading ──
+        state.phase = .open
+        addLog(.phaseChange(label: Phase.open.label))
+        playingState = .playerTurn
+        activeQuote = nil
+        lastActionResult = nil
+        // Coach steps: welcome → seeCard → askAlice → aliceQuote →
+        //              boughtResult → canKeepTrading → tapNext1 → [Next tapped]
+        await awaitPlayerNext()
+
+        if Task.isCancelled { return }
+
+        // ── Phase: Reveal 1 (card 10) ──
+        state.phase = .reveal1
+        state.revealedCentral.append(state.centralCards[0])
+        addLog(.cardReveal(index: 1, card: state.centralCards[0]))
+        addLog(.phaseChange(label: Phase.reveal1.label))
+        playingState = .playerTurn
+        activeQuote = nil
+        lastActionResult = nil
+        // Coach steps: cardRevealed1 → askBob → bobQuote →
+        //              soldResult → historyTip → tapNext2 → [Next tapped]
+        await awaitPlayerNext()
+
+        if Task.isCancelled { return }
+
+        // ── Phase: Reveal 2 (card 11) — Carol asks you ──
+        state.phase = .reveal2
+        state.revealedCentral.append(state.centralCards[1])
+        addLog(.cardReveal(index: 2, card: state.centralCards[1]))
+        addLog(.phaseChange(label: Phase.reveal2.label))
+
+        // Carol asks for a price — show slider immediately
+        addLog(.botAsksYou(botName: "Carol"))
+        playingState = .botAsksYou(botName: "Carol")
+        // Coach step: botAsksYou ("Card 11 revealed! Carol wants YOUR price...")
+        _ = await awaitUserQuote()
+
+        if Task.isCancelled { return }
+
+        // Carol walks away (always, for simplicity)
+        addLog(.botWalks(botName: "Carol"))
+        playingState = .botDecided(botName: "Carol", action: "walks away")
+        try? await Task.sleep(for: .milliseconds(1500))
+
+        if Task.isCancelled { return }
+
+        // Player turn for remaining coach steps
+        playingState = .playerTurn
+        activeQuote = nil
+        lastActionResult = nil
+        // Coach steps: botAsksResult → tapNext3 → [Next tapped]
+        await awaitPlayerNext()
+
+        if Task.isCancelled { return }
+
+        // ── Phase: Reveal 3 (card 9) ──
+        state.phase = .reveal3
+        state.revealedCentral.append(state.centralCards[2])
+        addLog(.cardReveal(index: 3, card: state.centralCards[2]))
+        addLog(.phaseChange(label: Phase.reveal3.label))
+        playingState = .playerTurn
+        activeQuote = nil
+        lastActionResult = nil
+        // Coach steps: cardRevealed3 → tapNext4 → [Next tapped]
+        await awaitPlayerNext()
+
+        if Task.isCancelled { return }
+
+        // ── Settlement ──
+        state.phase = .settle
+        self.finalTotal = state.finalTotal()
+        self.scores = settle(state: state)
+        self.tutorialManager?.skip()
+        self.screen = .settlement
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // MARK: - Player Actions (called by Views)
     // ═══════════════════════════════════════════════════════════════════════
 
     /// Player asks a bot for a price. Shows single quote — one at a time.
     func askBot(_ botName: String) {
-        guard let state = gameState, let bot = botMap[botName] else { return }
-        let quote = bot.getQuote(state: state, requester: Self.humanID)
+        guard let state = gameState else { return }
+
+        // In tutorial, use hardcoded quotes
+        let quote: Quote
+        if isTutorial {
+            switch botName {
+            case "Alice": quote = Self.tutorialAliceQuote
+            case "Bob":   quote = Self.tutorialBobQuote
+            default:      return  // Only Alice and Bob are allowed in tutorial
+            }
+        } else {
+            guard let bot = botMap[botName] else { return }
+            quote = bot.getQuote(state: state, requester: Self.humanID)
+        }
+
         activeQuote = (botName: botName, quote: quote)
         lastActionResult = nil
         addLog(.yourQuote(botName: botName, bid: quote.bid, ask: quote.ask))
+        tutorialManager?.advance(trigger: .botAsked(botName))
     }
 
     /// Player buys from the currently quoted bot at their ask price.
     func buyFromActive() {
         guard let state = gameState,
-              let active = activeQuote,
-              let _ = botMap[active.botName] else { return }
+              let active = activeQuote else { return }
         do {
             try executeTradeDirectly(
                 state: state, buyer: Self.humanID, seller: active.botName, price: active.quote.ask)
-            recordTradeForAllBots(buyer: Self.humanID, seller: active.botName)
+            if !isTutorial {
+                recordTradeForAllBots(buyer: Self.humanID, seller: active.botName)
+                if let bot = botMap[active.botName] {
+                    bot.tracker.recordDirectTrade(opponent: Self.humanID, opponentBought: true)
+                }
+            }
             addLog(.yourBuy(botName: active.botName, price: active.quote.ask))
             showActionResult("Bought from \(active.botName) at \(active.quote.ask)")
+            tutorialManager?.advance(trigger: .bought)
         } catch {
             addLog(.info(message: "Error: \(error.localizedDescription)", important: false))
         }
@@ -319,14 +545,19 @@ final class GameViewModel {
     /// Player sells to the currently quoted bot at their bid price.
     func sellToActive() {
         guard let state = gameState,
-              let active = activeQuote,
-              let _ = botMap[active.botName] else { return }
+              let active = activeQuote else { return }
         do {
             try executeTradeDirectly(
                 state: state, buyer: active.botName, seller: Self.humanID, price: active.quote.bid)
-            recordTradeForAllBots(buyer: active.botName, seller: Self.humanID)
+            if !isTutorial {
+                recordTradeForAllBots(buyer: active.botName, seller: Self.humanID)
+                if let bot = botMap[active.botName] {
+                    bot.tracker.recordDirectTrade(opponent: Self.humanID, opponentBought: false)
+                }
+            }
             addLog(.yourSell(botName: active.botName, price: active.quote.bid))
             showActionResult("Sold to \(active.botName) at \(active.quote.bid)")
+            tutorialManager?.advance(trigger: .sold)
         } catch {
             addLog(.info(message: "Error: \(error.localizedDescription)", important: false))
         }
@@ -335,8 +566,15 @@ final class GameViewModel {
     /// Player passes on the current quote — clears it with a brief message.
     func passOnQuote() {
         guard let active = activeQuote else { return }
+        if !isTutorial {
+            // Bot reads the player's recent trades with other bots (soft adjustment)
+            if let bot = botMap[active.botName] {
+                bot.tracker.recordPassWithMarketRead(opponent: Self.humanID)
+            }
+        }
         addLog(.yourPass(botName: active.botName))
         showActionResult("Passed")
+        tutorialManager?.advance(trigger: .passed)
     }
 
     /// Show a brief result message, then auto-clear after a delay.
@@ -353,6 +591,7 @@ final class GameViewModel {
 
     /// Player submits a quote when a bot asks (from slider).
     func submitQuote(_ quote: Quote) {
+        tutorialManager?.advance(trigger: .quotedBot)
         quoteContinuation?.resume(returning: quote)
         quoteContinuation = nil
     }
@@ -361,6 +600,7 @@ final class GameViewModel {
     func playerTappedNext() {
         activeQuote = nil
         lastActionResult = nil
+        tutorialManager?.advance(trigger: .nextTapped)
         nextContinuation?.resume()
         nextContinuation = nil
     }
@@ -375,6 +615,8 @@ final class GameViewModel {
 
     /// Return to main menu from settlement screen.
     func playAgain() {
+        tutorialManager = nil
+        isTutorial = false
         screen = .mainMenu
     }
 
@@ -480,7 +722,7 @@ final class GameViewModel {
         if let result = lastActionResult {
             return result
         }
-        return log.last(where: { $0.isImportant })?.displayText ?? "Your turn -- ask a bot for a price"
+        return log.last(where: { $0.isImportant })?.displayText ?? "Your turn -- ask a trader for a price"
     }
 
     /// True when the player can freely ask/buy/sell (main turn or wind-down mini turn).
@@ -494,6 +736,52 @@ final class GameViewModel {
     var isWindDownTurn: Bool {
         if case .windDownTurn = playingState { return true }
         return false
+    }
+
+    /// Player's rank in the current game (1 = best). Available after settlement.
+    var playerRank: Int {
+        let sorted = sortedScores
+        guard let idx = sorted.firstIndex(where: { $0.name == Self.humanID }) else { return 0 }
+        return idx + 1
+    }
+
+    /// Player's P&L in the current game. Available after settlement.
+    var playerPnL: Int {
+        scores[Self.humanID] ?? 0
+    }
+
+    /// Number of trades the player made in this game.
+    var playerTradeCount: Int {
+        gameState?.trades.filter {
+            $0.buyer == Self.humanID || $0.seller == Self.humanID
+        }.count ?? 0
+    }
+
+    /// Text summary for sharing game results.
+    var shareText: String {
+        let pnlStr = playerPnL >= 0 ? "+\(playerPnL)" : "\(playerPnL)"
+        let rankSuffix: String
+        switch playerRank {
+        case 1: rankSuffix = "1st"
+        case 2: rankSuffix = "2nd"
+        case 3: rankSuffix = "3rd"
+        default: rankSuffix = "\(playerRank)th"
+        }
+        return """
+        MagCry [\(difficulty.label)]
+        P&L: \(pnlStr) (\(rankSuffix) place)
+        Final total: \(finalTotal) | \(playerTradeCount) trades
+        """
+    }
+
+    /// Personal best P&L for the current difficulty.
+    var personalBest: Int? {
+        scoreStore.statsFor(difficulty).bestPnL
+    }
+
+    /// Current win streak for the current difficulty.
+    var currentStreak: Int {
+        scoreStore.statsFor(difficulty).currentStreak
     }
 }
 

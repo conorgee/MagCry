@@ -1,16 +1,22 @@
 import SwiftUI
 
-/// Slider-based quote input shown when a bot asks "What's your price?"
+/// Slider-based quote input shown when a trader asks "What's your price?"
 /// User sets the bid with a slider; ask = bid + 2 is shown live.
+/// When `lockedBid` is set (tutorial mode), the slider is disabled at that value.
 struct QuoteInputView: View {
     var vm: GameViewModel
     let botName: String
+    var lockedBid: Int? = nil
 
     @State private var bidValue: Double = 60
 
+    private var isLocked: Bool { lockedBid != nil }
+    private var displayBid: Int { lockedBid ?? Int(bidValue) }
+    private var displayAsk: Int { displayBid + 2 }
+
     var body: some View {
         VStack(spacing: 16) {
-            // Bot asking
+            // Trader asking
             Text("\(botName) asks:")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -25,7 +31,7 @@ struct QuoteInputView: View {
                     Text("BID")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("\(Int(bidValue))")
+                    Text("\(displayBid)")
                         .font(.title.monospacedDigit())
                         .fontWeight(.bold)
                         .foregroundStyle(.red)
@@ -34,18 +40,20 @@ struct QuoteInputView: View {
                     Text("ASK")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("\(Int(bidValue) + 2)")
+                    Text("\(displayAsk)")
                         .font(.title.monospacedDigit())
                         .fontWeight(.bold)
                         .foregroundStyle(.green)
                 }
             }
 
-            // Slider
+            // Slider (disabled when locked in tutorial)
             VStack(spacing: 4) {
                 let sliderRange = Double(vm.suggestedBidRange.lowerBound)...Double(vm.suggestedBidRange.upperBound)
-                Slider(value: $bidValue, in: sliderRange, step: 1)
-                    .tint(.cyan)
+                Slider(value: isLocked ? .constant(Double(lockedBid!)) : $bidValue,
+                       in: sliderRange, step: 1)
+                    .tint(isLocked ? .gray : .cyan)
+                    .disabled(isLocked)
 
                 HStack {
                     Text("\(vm.suggestedBidRange.lowerBound)")
@@ -64,7 +72,7 @@ struct QuoteInputView: View {
 
             // Submit button
             Button("Submit Price") {
-                let bid = Int(bidValue)
+                let bid = displayBid
                 let quote = Quote(bid: bid, ask: bid + 2)
                 vm.submitQuote(quote)
             }
@@ -74,7 +82,9 @@ struct QuoteInputView: View {
         .background(Color.white.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .onAppear {
-            bidValue = (vm.playerEV.rounded()) - 1
+            if lockedBid == nil {
+                bidValue = (vm.playerEV.rounded()) - 1
+            }
         }
     }
 }

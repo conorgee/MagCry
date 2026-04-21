@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Displays the 3 central card slots: revealed cards shown face-up, hidden as "?".
+/// Displays the 3 central card slots: revealed cards shown face-up with flip animation, hidden as "?".
 struct CentralCardsView: View {
     let centralCards: [Int]   // All 3 central cards (for count)
     let revealed: [Int]       // Cards revealed so far
@@ -15,43 +15,81 @@ struct CentralCardsView: View {
 
             HStack(spacing: 12) {
                 ForEach(0..<3, id: \.self) { index in
-                    cardView(index: index)
+                    FlipCardView(
+                        isRevealed: index < revealed.count,
+                        value: index < revealed.count ? revealed[index] : nil
+                    )
+                }
+            }
+        }
+    }
+}
+
+/// A single card that flips from face-down to face-up with a 3D rotation.
+private struct FlipCardView: View {
+    let isRevealed: Bool
+    let value: Int?
+
+    @State private var flipDegrees: Double = 0
+
+    var body: some View {
+        ZStack {
+            if flipDegrees < 90 && !isRevealed {
+                // Face-down (showing back)
+                cardBack
+            } else if flipDegrees < 90 && isRevealed && !hasFlipped {
+                // Already revealed on appear (no animation needed)
+                cardFace
+            } else if flipDegrees >= 90 {
+                // Mid-flip: show face (counter-rotated so text isn't mirrored)
+                cardFace
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            } else {
+                cardFace
+            }
+        }
+        .rotation3DEffect(.degrees(flipDegrees), axis: (x: 0, y: 1, z: 0))
+        .onChange(of: isRevealed) { _, newValue in
+            if newValue {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    flipDegrees = 180
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func cardView(index: Int) -> some View {
-        if index < revealed.count {
-            // Revealed card
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white)
-                    .frame(width: 60, height: 80)
-                    .shadow(color: .cyan.opacity(0.3), radius: 4)
+    private var hasFlipped: Bool { flipDegrees > 0 }
 
-                Text(cardString(revealed[index]))
+    private var cardFace: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white)
+                .frame(width: 60, height: 80)
+                .shadow(color: .cyan.opacity(0.3), radius: 4)
+
+            if let value = value {
+                Text(cardString(value))
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundStyle(.black)
             }
-        } else {
-            // Hidden card
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.blue.opacity(0.3))
-                    .frame(width: 60, height: 80)
+        }
+    }
 
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.blue.opacity(0.5), lineWidth: 2)
-                    .frame(width: 60, height: 80)
+    private var cardBack: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.blue.opacity(0.3))
+                .frame(width: 60, height: 80)
 
-                Text("?")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.blue.opacity(0.6))
-            }
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.blue.opacity(0.5), lineWidth: 2)
+                .frame(width: 60, height: 80)
+
+            Text("?")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundStyle(.blue.opacity(0.6))
         }
     }
 

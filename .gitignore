@@ -8,3 +8,17 @@ __pycache__/
 DerivedData/
 .build/
 swift/build/
+
+# AI tool configs
+.claude/
+.opencode/
+
+# Kotlin / Gradle
+kotlin/.gradle/
+kotlin/build/
+kotlin/app/build/
+kotlin/gradle/wrapper/gradle-wrapper.jar
+*.class
+
+# Excel temp/lock files
+~$*

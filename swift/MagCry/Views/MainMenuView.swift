@@ -3,6 +3,7 @@ import SwiftUI
 struct MainMenuView: View {
     var vm: GameViewModel
     @State private var showInstructions = false
+    @State private var showStats = false
 
     private let bookURL = URL(string: "https://www.amazon.com/Trading-Game-Confession-Gary-Stevenson/dp/0593727215")!
 
@@ -46,6 +47,26 @@ struct MainMenuView: View {
                 }
                 .padding(.top, 24)
 
+                // Tutorial
+                Button {
+                    vm.startTutorial()
+                } label: {
+                    Text("Tutorial")
+                        .font(.subheadline)
+                        .foregroundStyle(.cyan.opacity(0.7))
+                }
+                .padding(.top, 8)
+
+                // Stats
+                Button {
+                    showStats = true
+                } label: {
+                    Text("Stats")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .padding(.top, 8)
+
                 Spacer()
 
                 // Attribution
@@ -60,10 +81,12 @@ struct MainMenuView: View {
                             .underline()
                     }
                     Link(destination: URL(string: "https://buymeacoffee.com/conorgee")!) {
-                        Text("Buy Me a Coffee")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.45))
-                            .underline()
+                        if let img = UIImage(named: "bmc-button") {
+                            Image(uiImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 32)
+                        }
                     }
                     .padding(.top, 12)
                 }
@@ -72,6 +95,9 @@ struct MainMenuView: View {
         }
         .sheet(isPresented: $showInstructions) {
             InstructionsView()
+        }
+        .sheet(isPresented: $showStats) {
+            StatsView(scoreStore: vm.scoreStore)
         }
     }
 

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>The Trading Game</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ═══ MAIN MENU ═══ -->
+  <div id="screen-menu" class="screen active">
+    <div class="menu-container">
+      <div class="menu-logo">
+        <svg viewBox="0 0 100 100" class="logo-svg">
+          <text x="50" y="58" text-anchor="middle" font-size="48" fill="#00d4ff" font-weight="bold">$</text>
+          <circle cx="50" cy="50" r="45" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.3"/>
+        </svg>
+      </div>
+      <h1 class="menu-title">The Trading Game</h1>
+      <p class="menu-subtitle">Based on Gary Stevenson's book</p>
+
+      <div class="difficulty-buttons">
+        <button class="btn-difficulty btn-easy" data-difficulty="easy">
+          <span class="diff-name">Easy</span>
+          <span class="diff-desc">4 simple bots, no adaptation</span>
+        </button>
+        <button class="btn-difficulty btn-medium" data-difficulty="medium">
+          <span class="diff-name">Medium</span>
+          <span class="diff-desc">2 simple + 2 strategic bots</span>
+        </button>
+        <button class="btn-difficulty btn-hard" data-difficulty="hard">
+          <span class="diff-name">Hard</span>
+          <span class="diff-desc">4 strategic bluffing bots</span>
+        </button>
+      </div>
+
+      <div class="menu-links">
+        <button class="btn-link" id="btn-how-to-play">How to Play</button>
+        <button class="btn-link btn-link-cyan" id="btn-tutorial">Tutorial</button>
+      </div>
+
+      <div class="menu-footer">
+        <a href="https://garystevenson.com/" target="_blank" rel="noopener" class="footer-link">
+          Based on "The Trading Game" by Gary Stevenson
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ GAME SCREEN ═══ -->
+  <div id="screen-game" class="screen">
+    <div class="game-container">
+      <!-- Header -->
+      <div class="game-header">
+        <div class="header-top">
+          <span class="phase-label" id="phase-label">Open Trading</span>
+          <div class="header-right">
+            <span class="trade-count" id="trade-count"></span>
+            <button class="btn-icon btn-quit" id="btn-quit" title="Quit">&times;</button>
+          </div>
+        </div>
+        <div class="header-info">
+          <span class="your-card" id="your-card"></span>
+          <span class="your-ev" id="your-ev"></span>
+        </div>
+      </div>
+
+      <!-- Central Cards -->
+      <div class="central-cards-section">
+        <div class="central-label">CENTRAL CARDS</div>
+        <div class="central-cards" id="central-cards">
+          <div class="card-slot hidden" id="central-0"><span>?</span></div>
+          <div class="card-slot hidden" id="central-1"><span>?</span></div>
+          <div class="card-slot hidden" id="central-2"><span>?</span></div>
+        </div>
+      </div>
+
+      <!-- Last Event -->
+      <div class="last-event" id="last-event"></div>
+
+      <!-- Interaction Area -->
+      <div class="interaction-area" id="interaction-area">
+        <!-- Bot ask buttons (default state) -->
+        <div class="bot-buttons" id="bot-buttons">
+          <button class="btn-bot" data-bot="Alice">Ask Alice</button>
+          <button class="btn-bot" data-bot="Bob">Ask Bob</button>
+          <button class="btn-bot" data-bot="Carol">Ask Carol</button>
+          <button class="btn-bot" data-bot="Dave">Ask Dave</button>
+        </div>
+
+        <!-- Active quote (shown after asking) -->
+        <div class="quote-view hidden" id="quote-view">
+          <div class="quote-header">
+            <span class="quote-bot-name" id="quote-bot-name"></span>
+            <span class="quote-prices">
+              <span class="bid-price" id="quote-bid"></span> &mdash;
+              <span class="ask-price" id="quote-ask"></span>
+            </span>
+          </div>
+          <div class="quote-actions">
+            <button class="btn-action btn-buy" id="btn-buy">Buy <span id="buy-price"></span></button>
+            <button class="btn-action btn-sell" id="btn-sell">Sell <span id="sell-price"></span></button>
+            <button class="btn-action btn-pass" id="btn-pass">Pass</button>
+          </div>
+        </div>
+
+        <!-- Bot asks you (slider) -->
+        <div class="slider-view hidden" id="slider-view">
+          <div class="slider-header">
+            <span class="slider-bot-name" id="slider-bot-name"></span>
+            <span class="slider-prompt">What's your price?</span>
+          </div>
+          <div class="slider-display">
+            <span class="bid-price" id="slider-bid"></span> &mdash;
+            <span class="ask-price" id="slider-ask"></span>
+          </div>
+          <input type="range" class="price-slider" id="price-slider" min="-12" max="132" step="1" value="60">
+          <div class="slider-labels">
+            <span id="slider-min"></span>
+            <span class="ev-label" id="slider-ev"></span>
+            <span id="slider-max"></span>
+          </div>
+          <button class="btn-primary" id="btn-submit-quote">Submit Price</button>
+        </div>
+
+        <!-- Bot decision result -->
+        <div class="decision-result hidden" id="decision-result">
+          <span id="decision-text"></span>
+        </div>
+
+        <!-- Bots trading spinner -->
+        <div class="bots-trading hidden" id="bots-trading">
+          <div class="spinner"></div>
+          <span>Bots are trading...</span>
+        </div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div class="bottom-bar">
+        <button class="btn-primary btn-next" id="btn-next">Next</button>
+        <button class="btn-icon btn-history" id="btn-history" title="Trade History">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Tutorial Coach Overlay -->
+      <div class="coach-overlay hidden" id="coach-overlay">
+        <div class="coach-bubble" id="coach-bubble">
+          <p id="coach-message"></p>
+          <button class="btn-coach-tap" id="btn-coach-tap">Tap to continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SETTLEMENT SCREEN ═══ -->
+  <div id="screen-settlement" class="screen">
+    <div class="settlement-container">
+      <h1 class="settlement-title">SETTLEMENT</h1>
+      <div class="final-total" id="final-total"></div>
+      <p class="settlement-subtitle">Sum of all 8 cards in play</p>
+
+      <!-- Cards Dealt -->
+      <div class="settlement-section">
+        <h2 class="section-title">Cards Dealt</h2>
+        <div id="cards-dealt" class="cards-dealt"></div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="settlement-section">
+        <h2 class="section-title">Leaderboard</h2>
+        <div id="leaderboard" class="leaderboard"></div>
+      </div>
+
+      <!-- Your Trades -->
+      <div class="settlement-section">
+        <h2 class="section-title">Your Trades</h2>
+        <div id="your-trades" class="your-trades"></div>
+      </div>
+
+      <button class="btn-primary btn-play-again" id="btn-play-again">Play Again</button>
+    </div>
+  </div>
+
+  <!-- ═══ TRADE LOG (slide-up panel) ═══ -->
+  <div class="trade-log-overlay hidden" id="trade-log-overlay">
+    <div class="trade-log-panel">
+      <div class="trade-log-header">
+        <h2>Trade History</h2>
+        <button class="btn-icon" id="btn-close-log">&times;</button>
+      </div>
+      <div class="trade-log-body" id="trade-log-body">
+        <p class="log-empty">No trades yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ INSTRUCTIONS (overlay) ═══ -->
+  <div class="instructions-overlay hidden" id="instructions-overlay">
+    <div class="instructions-panel">
+      <div class="instructions-header">
+        <h2>How to Play</h2>
+        <button class="btn-icon" id="btn-close-instructions">&times;</button>
+      </div>
+      <div class="instructions-pages" id="instructions-pages">
+        <!-- Pages are created by JS -->
+      </div>
+      <div class="instructions-nav">
+        <div class="page-dots" id="page-dots"></div>
+        <button class="btn-primary btn-instructions-next" id="btn-instructions-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

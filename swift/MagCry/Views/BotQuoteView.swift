@@ -7,6 +7,9 @@ struct BotQuoteView: View {
     let onBuy: () -> Void
     let onSell: () -> Void
     let onPass: () -> Void
+    var buyEnabled: Bool = true
+    var sellEnabled: Bool = true
+    var passEnabled: Bool = true
 
     var body: some View {
         VStack(spacing: 10) {
@@ -41,10 +44,11 @@ struct BotQuoteView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.green.opacity(0.25))
-                        .foregroundStyle(.green)
+                        .background(buyEnabled ? Color.green.opacity(0.25) : Color.gray.opacity(0.1))
+                        .foregroundStyle(buyEnabled ? .green : .gray)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
+                .disabled(!buyEnabled)
 
                 Button {
                     onSell()
@@ -54,10 +58,11 @@ struct BotQuoteView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.red.opacity(0.25))
-                        .foregroundStyle(.red)
+                        .background(sellEnabled ? Color.red.opacity(0.25) : Color.gray.opacity(0.1))
+                        .foregroundStyle(sellEnabled ? .red : .gray)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
+                .disabled(!sellEnabled)
 
                 Button {
                     onPass()
@@ -67,10 +72,11 @@ struct BotQuoteView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.1))
-                        .foregroundStyle(.secondary)
+                        .background(passEnabled ? Color.white.opacity(0.1) : Color.gray.opacity(0.05))
+                        .foregroundStyle(passEnabled ? Color.secondary : Color.gray.opacity(0.5))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
+                .disabled(!passEnabled)
             }
         }
         .padding(12)
