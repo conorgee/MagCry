@@ -18,13 +18,9 @@
   <div id="screen-menu" class="screen active">
     <div class="menu-container">
       <div class="menu-logo">
-        <svg viewBox="0 0 100 100" class="logo-svg">
-          <text x="50" y="58" text-anchor="middle" font-size="48" fill="#00d4ff" font-weight="bold">$</text>
-          <circle cx="50" cy="50" r="45" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.3"/>
-        </svg>
+        <img src="icons/logo.png" alt="MagCry" class="logo-img">
       </div>
       <h1 class="menu-title">MagCry</h1>
-      <p class="menu-subtitle">Based on Gary Stevenson's book</p>
 
       <div class="difficulty-buttons">
         <button class="btn-difficulty btn-easy" data-difficulty="easy">
@@ -44,11 +40,16 @@
       <div class="menu-links">
         <button class="btn-link" id="btn-how-to-play">How to Play</button>
         <button class="btn-link btn-link-cyan" id="btn-tutorial">Tutorial</button>
+        <button class="btn-link" id="btn-stats">Stats</button>
       </div>
 
       <div class="menu-footer">
-        <a href="https://garystevenson.com/" target="_blank" rel="noopener" class="footer-link">
-          Based on "The Trading Game" by Gary Stevenson
+        <span class="footer-based-on">Based on</span>
+        <a href="https://www.amazon.com/Trading-Game-Confession-Gary-Stevenson/dp/0593727215" target="_blank" rel="noopener" class="footer-link">
+          The Trading Game by Gary Stevenson
+        </a>
+        <a href="https://buymeacoffee.com/conorgee" target="_blank" rel="noopener" class="bmc-link">
+          <img src="icons/bmc-button.png" alt="Buy Me a Coffee" class="bmc-img">
         </a>
       </div>
     </div>
@@ -76,9 +77,24 @@
       <div class="central-cards-section">
         <div class="central-label">CENTRAL CARDS</div>
         <div class="central-cards" id="central-cards">
-          <div class="card-slot hidden" id="central-0"><span>?</span></div>
-          <div class="card-slot hidden" id="central-1"><span>?</span></div>
-          <div class="card-slot hidden" id="central-2"><span>?</span></div>
+          <div class="card-slot" id="central-0">
+            <div class="card-inner">
+              <div class="card-front"><span>?</span></div>
+              <div class="card-back"><span></span></div>
+            </div>
+          </div>
+          <div class="card-slot" id="central-1">
+            <div class="card-inner">
+              <div class="card-front"><span>?</span></div>
+              <div class="card-back"><span></span></div>
+            </div>
+          </div>
+          <div class="card-slot" id="central-2">
+            <div class="card-inner">
+              <div class="card-front"><span>?</span></div>
+              <div class="card-back"><span></span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -179,7 +195,11 @@
       <div class="settlement-section">
         <h2 class="section-title">Leaderboard</h2>
         <div id="leaderboard" class="leaderboard"></div>
+        <p class="personal-best hidden" id="personal-best"></p>
       </div>
+
+      <!-- Streak callout -->
+      <p class="streak-callout hidden" id="streak-callout"></p>
 
       <!-- Your Trades -->
       <div class="settlement-section">
@@ -188,6 +208,35 @@
       </div>
 
       <button class="btn-primary btn-play-again" id="btn-play-again">Play Again</button>
+
+      <!-- Share button -->
+      <button class="btn-share" id="btn-share">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+        </svg>
+        Share Result
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ STATS SCREEN (overlay) ═══ -->
+  <div class="stats-overlay hidden" id="stats-overlay">
+    <div class="stats-panel">
+      <div class="stats-header">
+        <h2>Stats</h2>
+        <button class="btn-icon" id="btn-close-stats">Done</button>
+      </div>
+      <div class="stats-body">
+        <div class="stats-picker" id="stats-picker">
+          <button class="stats-tab active" data-diff="easy">Easy</button>
+          <button class="stats-tab" data-diff="medium">Medium</button>
+          <button class="stats-tab" data-diff="hard">Hard</button>
+        </div>
+        <div class="stats-content" id="stats-content">
+          <!-- Filled by JS -->
+        </div>
+        <button class="btn-reset-stats" id="btn-reset-stats">Reset All Stats</button>
+      </div>
     </div>
   </div>
 

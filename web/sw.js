@@ -4,7 +4,7 @@
  * Strategy: cache-first for app shell, network-first for everything else.
  */
 
-const CACHE_NAME = 'trading-game-v1';
+const CACHE_NAME = 'magcry-v2';
 
 const APP_SHELL = [
   './',
@@ -20,9 +20,12 @@ const APP_SHELL = [
   './js/strategicBot.js',
   './js/gameLoop.js',
   './js/tutorial.js',
+  './js/scoreStore.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/logo.png',
+  './icons/bmc-button.png',
 ];
 
 // Install — cache the app shell

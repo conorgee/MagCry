@@ -10,6 +10,7 @@ import { Phase, PHASE_SHORT_LABELS, Quote } from './state.js';
 import { expectedTotal } from './deck.js';
 import { executeTradeDirect } from './trading.js';
 import { TutorialManager } from './tutorial.js';
+import { ScoreStore } from './scoreStore.js';
 
 // ── Instruction pages (6 pages, matching Swift InstructionsView) ────────────
 
@@ -17,32 +18,38 @@ const INSTRUCTION_PAGES = [
   {
     icon: '\u2660',
     title: 'The Game',
-    text: '5 players each get 1 secret card. 3 more cards are dealt face-down in the centre. Everyone trades contracts on the sum of all 8 cards in play.',
+    text: '5 players each get 1 secret card. 3 more cards go face-down in the center. You\'re all betting on the sum of these 8 cards.',
+    visual: 'deckFan',
   },
   {
-    icon: '+12',
+    icon: '\uD83D\uDC41',
     title: 'Your Card',
-    text: 'Cards range from \u221210 to +20. Only you can see your card. A higher card means you should expect the total to be higher than average.',
+    text: 'Cards range from \u221210 to 20. Only you can see yours. A higher card means a higher expected sum.',
+    visual: 'mockCard',
   },
   {
-    icon: '58\u201460',
+    icon: '\uD83D\uDCAC',
     title: 'Get a Price',
-    text: 'Tap a trader to get a two-way quote \u2014 a bid and an ask. The spread is always exactly 2. You decide whether to buy, sell, or pass.',
+    text: 'Tap a trader to ask for a two-way quote. The spread is always exactly 2. You see their bid and ask price.',
+    visual: 'mockQuote',
   },
   {
     icon: '\u21C5',
     title: 'Buy or Sell',
-    text: 'BUY at the ask if you think the total will be ABOVE it. You profit (Total \u2212 Ask) per contract.\n\nSELL at the bid if you think the total will be BELOW it. You profit (Bid \u2212 Total) per contract.',
+    text: 'Buy if you think the sum will be ABOVE the ask. Sell if you think it will be BELOW the bid. Not sure? Just pass.',
+    visual: 'pnlExamples',
   },
   {
-    icon: '? \u2192 9',
+    icon: '\uD83C\uDCCF',
     title: 'Card Reveals',
-    text: 'Between rounds, central cards flip face-up one at a time. Each reveal gives you more information \u2014 use it to sharpen your estimate.',
+    text: 'Between rounds, central cards flip one at a time. New info means better estimates. Adjust your strategy as cards are revealed.',
+    visual: 'miniCentral',
   },
   {
-    icon: '\u25C9',
+    icon: '\uD83E\uDDE0',
     title: 'Watch the Traders',
-    text: 'Bots track your trading patterns. If you keep buying, they raise prices. If you keep selling, they lower them.\n\nOn Hard mode, strategic bots bluff to mislead you.',
+    text: 'Traders track your trading pattern. Keep buying and they\'ll raise prices on you. On Hard mode, traders bluff to mislead you.',
+    visual: null,
   },
 ];
 
@@ -63,8 +70,10 @@ class App {
   constructor() {
     this.engine = null;
     this.tutorial = new TutorialManager();
+    this.scoreStore = new ScoreStore();
     this.isTutorial = false;
     this._tutorialCancelled = false;
+    this._difficulty = null; // current game difficulty
 
     // Promise resolvers
     this._resolveAction = null;   // waitForPlayerAction
@@ -98,6 +107,7 @@ class App {
     }
     $('btn-how-to-play').addEventListener('click', () => this.showInstructions());
     $('btn-tutorial').addEventListener('click', () => this.startTutorial());
+    $('btn-stats').addEventListener('click', () => this.showStats());
   }
 
   _bindGame() {
@@ -202,6 +212,27 @@ class App {
     });
     $('btn-instructions-next').addEventListener('click', () => this._nextIPage());
     $('btn-play-again').addEventListener('click', () => this.showScreen('menu'));
+    $('btn-share').addEventListener('click', () => this._shareResult());
+
+    // Stats overlay
+    $('btn-close-stats').addEventListener('click', () => this.hideStats());
+    $('stats-overlay').addEventListener('click', e => {
+      if (e.target === $('stats-overlay')) this.hideStats();
+    });
+    for (const tab of document.querySelectorAll('.stats-tab')) {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._renderStats(tab.dataset.diff);
+      });
+    }
+    $('btn-reset-stats').addEventListener('click', () => {
+      if (confirm('Reset all stats?\n\nThis will permanently erase all your stats across all difficulties.')) {
+        this.scoreStore.resetAll();
+        const activeDiff = document.querySelector('.stats-tab.active').dataset.diff;
+        this._renderStats(activeDiff);
+      }
+    });
   }
 
   // ── Screen management ───────────────────────────────────────────────────
@@ -215,6 +246,7 @@ class App {
 
   startGame(difficulty) {
     this.isTutorial = false;
+    this._difficulty = difficulty;
     this._tState = null;
     this._resetUI();
     this.engine = new GameEngine(this._uiCallbacks());
@@ -273,8 +305,9 @@ class App {
     $('btn-next').classList.remove('wind-down');
     for (let i = 0; i < 3; i++) {
       const s = $(`central-${i}`);
-      s.className = 'card-slot hidden';
-      s.querySelector('span').textContent = '?';
+      s.classList.remove('flipped');
+      s.querySelector('.card-front span').textContent = '?';
+      s.querySelector('.card-back span').textContent = '';
     }
     this._showView('bot-buttons');
     this._enableBots(true);
@@ -319,8 +352,8 @@ class App {
 
   async _onReveal(card, idx, state) {
     const slot = $(`central-${idx - 1}`);
-    slot.className = 'card-slot revealed fade-in';
-    slot.querySelector('span').textContent = fmtCard(card);
+    slot.querySelector('.card-back span').textContent = fmtCard(card);
+    slot.classList.add('flipped');
     this._refreshEv(state);
     $('last-event').textContent = `Central card ${idx} revealed: ${fmtCard(card)}`;
     $('last-event').style.color = '';
@@ -437,6 +470,13 @@ class App {
   }
 
   async _onSettlement(state, scores, board, breakdown) {
+    // Record stats (non-tutorial only)
+    if (!this.isTutorial && this._difficulty) {
+      const humanPnl = scores[HUMAN_ID] || 0;
+      const rank = board.findIndex(([pid]) => pid === HUMAN_ID) + 1;
+      const tradeCount = breakdown.length;
+      this.scoreStore.record(this._difficulty, humanPnl, rank, tradeCount);
+    }
     this._renderSettlement(state, scores, board, breakdown);
     this.showScreen('settlement');
   }
@@ -498,38 +538,77 @@ class App {
     const T = state.finalTotal();
     $('final-total').textContent = T;
 
-    // Cards dealt
+    // Save for share
+    this._lastSettlement = { board, breakdown, finalTotal: T };
+
+    // Cards dealt (with staggered animation)
     const cd = $('cards-dealt');
     cd.innerHTML = '';
+    let delayIdx = 0;
     for (const pid of state.playerIds) {
       const div = document.createElement('div');
       div.className = `card-row${pid === HUMAN_ID ? ' you' : ''}`;
+      div.style.animationDelay = `${delayIdx * 0.15}s`;
       div.innerHTML = `<span class="card-label">${pid}</span>` +
         `<span class="card-value">${fmtCard(state.privateCards[pid])}</span>`;
       cd.appendChild(div);
+      delayIdx++;
     }
-    for (let i = 0; i < state.centralCards.length; i++) {
-      const div = document.createElement('div');
-      div.className = 'card-row central';
-      div.innerHTML = `<span class="card-label">Central ${i + 1}</span>` +
-        `<span class="card-value">${fmtCard(state.centralCards[i])}</span>`;
-      cd.appendChild(div);
-    }
+    // Central cards as one row
+    const centralDiv = document.createElement('div');
+    centralDiv.className = 'card-row central';
+    centralDiv.style.animationDelay = `${delayIdx * 0.15}s`;
+    centralDiv.innerHTML = `<span class="card-label">Central</span>` +
+      `<span class="card-value">${state.centralCards.map(fmtCard).join(', ')}</span>`;
+    cd.appendChild(centralDiv);
 
     // Leaderboard
     const lb = $('leaderboard');
     lb.innerHTML = '';
+    const isNewBest = this.scoreStore.isNewBest && !this.isTutorial;
     board.forEach(([pid, sc], i) => {
       const cls = sc > 0 ? 'positive' : sc < 0 ? 'negative' : 'zero';
       const div = document.createElement('div');
       div.className = `lb-row${pid === HUMAN_ID ? ' you' : ''}`;
-      div.innerHTML =
-        `<span class="lb-rank">${i + 1}.</span>` +
-        `<span class="lb-name">${pid}</span>` +
-        `<span class="lb-score ${cls}">${fmtScore(sc)}</span>` +
+      let html =
+        `<span class="lb-rank">#${i + 1}</span>` +
+        `<span class="lb-name">${pid}</span>`;
+      if (pid === HUMAN_ID && isNewBest) {
+        html += `<span class="lb-new-best">New Best!</span>`;
+      }
+      html += `<span class="lb-score ${cls}">${fmtScore(sc)}</span>` +
         (i === 0 ? '<span class="lb-winner">&#9733;</span>' : '');
+      div.innerHTML = html;
       lb.appendChild(div);
     });
+
+    // Personal best (non-tutorial only)
+    const pbEl = $('personal-best');
+    if (!this.isTutorial && this._difficulty) {
+      const best = this.scoreStore.statsFor(this._difficulty).bestPnL;
+      if (best !== null) {
+        pbEl.textContent = `Personal best: ${best >= 0 ? '+' + best : best}`;
+        pbEl.classList.remove('hidden');
+      } else {
+        pbEl.classList.add('hidden');
+      }
+    } else {
+      pbEl.classList.add('hidden');
+    }
+
+    // Streak callout (non-tutorial, >= 3 wins)
+    const streakEl = $('streak-callout');
+    if (!this.isTutorial && this._difficulty) {
+      const streak = this.scoreStore.statsFor(this._difficulty).currentStreak;
+      if (streak >= 3) {
+        streakEl.textContent = `${streak} wins in a row!`;
+        streakEl.classList.remove('hidden');
+      } else {
+        streakEl.classList.add('hidden');
+      }
+    } else {
+      streakEl.classList.add('hidden');
+    }
 
     // Your trades
     const yt = $('your-trades');
@@ -549,6 +628,9 @@ class App {
         yt.appendChild(div);
       }
     }
+
+    // Share button visibility (hide during tutorial)
+    $('btn-share').classList.toggle('hidden', this.isTutorial);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -606,6 +688,101 @@ class App {
   showTradeLog() { $('trade-log-overlay').classList.remove('hidden'); }
   hideTradeLog() { $('trade-log-overlay').classList.add('hidden'); }
 
+  // ── Share ───────────────────────────────────────────────────────────────
+
+  async _shareResult() {
+    if (!this.engine && !this._lastSettlement) return;
+    const { board, breakdown, finalTotal } = this._lastSettlement || {};
+    if (!board) return;
+
+    const humanScore = board.find(([pid]) => pid === HUMAN_ID);
+    const rank = board.findIndex(([pid]) => pid === HUMAN_ID) + 1;
+    const pnl = humanScore ? humanScore[1] : 0;
+    const pnlStr = pnl >= 0 ? `+${Math.round(pnl)}` : `${Math.round(pnl)}`;
+    const suffix = rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`;
+    const diffLabel = (this._difficulty || 'easy').charAt(0).toUpperCase() + (this._difficulty || 'easy').slice(1);
+
+    const text = `MagCry [${diffLabel}]\nP&L: ${pnlStr} (${suffix} place)\nFinal total: ${finalTotal} | ${breakdown.length} trades`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (_) { /* user cancelled or not supported */ }
+    }
+    // Clipboard fallback
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = $('btn-share');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Share Result`; }, 1500);
+    } catch (_) { /* ignore */ }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Stats screen
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  showStats() {
+    // Reset to Easy tab
+    document.querySelectorAll('.stats-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.diff === 'easy'));
+    this._renderStats('easy');
+    $('stats-overlay').classList.remove('hidden');
+  }
+
+  hideStats() {
+    $('stats-overlay').classList.add('hidden');
+  }
+
+  _renderStats(difficulty) {
+    const s = this.scoreStore.statsFor(difficulty);
+    const container = $('stats-content');
+
+    if (s.gamesPlayed === 0) {
+      const label = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+      container.innerHTML =
+        `<div class="stats-empty">` +
+        `<h3>No games played yet</h3>` +
+        `<p>Play a game on ${label} to see your stats here.</p>` +
+        `</div>`;
+      return;
+    }
+
+    const fmtPnl = v => (v >= 0 ? `+${v}` : `${v}`);
+    const winPct = s.gamesPlayed > 0 ? Math.round(s.winRate * 100) + '%' : '--';
+    const avgPnl = s.gamesPlayed > 0 ? fmtPnl(Math.round(s.averagePnL)) : '--';
+    const bestPnl = s.bestPnL !== null ? fmtPnl(s.bestPnL) : '--';
+
+    // Color helpers
+    const winColor = s.winRate >= 0.5 ? 'var(--buy)' : '#e67e22';
+    const bestColor = (s.bestPnL || 0) > 0 ? 'var(--buy)' : 'var(--sell)';
+    const avgColor = s.averagePnL > 0 ? 'var(--buy)' : s.averagePnL < 0 ? 'var(--sell)' : 'var(--text-secondary)';
+    const curStreakColor = s.currentStreak >= 3 ? 'var(--player)' : '#fff';
+    const bestStreakColor = s.bestStreak >= 3 ? 'var(--player)' : '#fff';
+
+    container.innerHTML =
+      `<div class="stats-grid">` +
+        this._statCard('Games Played', `${s.gamesPlayed}`, '#fff') +
+        this._statCard('Win Rate', winPct, winColor, `${s.gamesWon} wins`) +
+        this._statCard('Best P&L', bestPnl, bestColor) +
+        this._statCard('Avg P&L', avgPnl, avgColor) +
+        this._statCard('Current Streak', `${s.currentStreak}`, curStreakColor, s.currentStreak >= 3 ? 'On fire' : null) +
+        this._statCard('Best Streak', `${s.bestStreak}`, bestStreakColor) +
+        this._statCard('Total Trades', `${s.totalTrades}`, 'var(--accent)') +
+        `<div></div>` + // empty slot for balance
+      `</div>`;
+  }
+
+  _statCard(title, value, color, subtitle) {
+    return `<div class="stat-card">` +
+      `<span class="stat-card-title">${title}</span>` +
+      `<span class="stat-card-value" style="color:${color}">${value}</span>` +
+      (subtitle ? `<span class="stat-card-subtitle">${subtitle}</span>` : '') +
+      `</div>`;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // Instructions overlay (6-page)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -621,7 +798,8 @@ class App {
       div.innerHTML =
         `<div class="instruction-icon">${page.icon}</div>` +
         `<h3 class="instruction-title">${page.title}</h3>` +
-        `<p class="instruction-text">${page.text.replace(/\n/g, '<br>')}</p>`;
+        `<p class="instruction-text">${page.text.replace(/\n/g, '<br>')}</p>` +
+        this._instructionVisual(page.visual);
       container.appendChild(div);
 
       const dot = document.createElement('div');
@@ -630,6 +808,54 @@ class App {
     });
 
     this._updateIBtn();
+  }
+
+  /** Build visual HTML for instruction pages matching Swift. */
+  _instructionVisual(type) {
+    if (!type) return '';
+    switch (type) {
+      case 'deckFan': {
+        // 8 mini cards fanned out: 5 blue (player) + 3 cyan (central)
+        let cards = '';
+        for (let i = 0; i < 8; i++) {
+          const color = i < 5 ? 'blue' : 'cyan';
+          const rot = (i - 4) * 5;
+          cards += `<div class="fan-card fan-${color}" style="transform:rotate(${rot}deg)"></div>`;
+        }
+        return `<div class="visual-fan">${cards}</div>`;
+      }
+      case 'mockCard':
+        // Yellow-bordered card showing "+12"
+        return `<div class="visual-mock-card"><span>+12</span></div>`;
+      case 'mockQuote':
+        // Mock quote card with bid-ask and buttons
+        return `<div class="visual-mock-quote">` +
+          `<div class="mqh"><span class="mq-name">Alice</span>` +
+          `<span class="mq-prices"><span class="mq-bid">58</span> -- <span class="mq-ask">60</span></span></div>` +
+          `<div class="mq-btns">` +
+          `<span class="mq-btn mq-btn-buy">Buy 60</span>` +
+          `<span class="mq-btn mq-btn-sell">Sell 58</span>` +
+          `<span class="mq-btn mq-btn-pass">Pass</span>` +
+          `</div></div>`;
+      case 'pnlExamples':
+        return `<div class="visual-pnl">` +
+          `<div class="pnl-row pnl-green">` +
+          `<span>Buy at 60</span><span class="pnl-arrow">\u2192</span><span>Sum = 65</span>` +
+          `<span class="pnl-val pnl-pos">+5</span></div>` +
+          `<div class="pnl-row pnl-red">` +
+          `<span>Sell at 58</span><span class="pnl-arrow">\u2192</span><span>Sum = 65</span>` +
+          `<span class="pnl-val pnl-neg">\u22127</span></div>` +
+          `</div>`;
+      case 'miniCentral':
+        // 1 face-up + 2 face-down mini cards
+        return `<div class="visual-mini-central">` +
+          `<div class="mini-card mini-up"><span>9</span></div>` +
+          `<div class="mini-card mini-down"><span>?</span></div>` +
+          `<div class="mini-card mini-down"><span>?</span></div>` +
+          `</div>`;
+      default:
+        return '';
+    }
   }
 
   _nextIPage() {
@@ -912,11 +1138,11 @@ class App {
     this._showView('quote-view');
   }
 
-  /** Reveal a central card slot. */
+  /** Reveal a central card slot with 3D flip. */
   _revealSlot(idx, card) {
     const s = $(`central-${idx}`);
-    s.className = 'card-slot revealed fade-in';
-    s.querySelector('span').textContent = fmtCard(card);
+    s.querySelector('.card-back span').textContent = fmtCard(card);
+    s.classList.add('flipped');
   }
 
   /** Wait for a single click on an element (one-shot listener). */

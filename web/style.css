@@ -8,9 +8,9 @@
   --bg-card-hover: rgba(255,255,255,0.08);
   --text: #fff;
   --text-secondary: #8e8e93;
-  --accent: #00d4ff;
-  --buy: #34c759;
-  --sell: #ff3b30;
+  --accent: #64d2ff;
+  --buy: #30d158;
+  --sell: #ff453a;
   --player: #ffd60a;
   --easy: #33b34d;
   --medium: #d99926;
@@ -63,22 +63,23 @@ html, body {
 }
 
 .menu-logo {
-  width: 80px;
-  height: 80px;
+  width: 100%;
+  max-width: 280px;
+  padding: 0 40px;
 }
 
-.logo-svg { width: 100%; height: 100%; }
+.logo-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
 
 .menu-title {
-  font-size: 32px;
+  font-size: 38px;
   font-weight: 700;
   letter-spacing: -0.5px;
-}
-
-.menu-subtitle {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-bottom: 24px;
+  padding-top: 8px;
+  padding-bottom: 36px;
 }
 
 .difficulty-buttons {
@@ -136,21 +137,42 @@ html, body {
 }
 
 .btn-link:hover { color: rgba(255,255,255,0.8); }
-.btn-link-cyan { color: rgba(0,212,255,0.7); }
+.btn-link-cyan { color: rgba(100,210,255,0.7); }
 .btn-link-cyan:hover { color: var(--accent); }
 
 .menu-footer {
   margin-top: auto;
   padding-top: 20px;
+  padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-based-on {
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
 }
 
 .footer-link {
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-decoration: none;
+  color: rgba(255,255,255,0.45);
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.footer-link:hover { text-decoration: underline; }
+.footer-link:hover { color: rgba(255,255,255,0.6); }
+
+.bmc-link {
+  margin-top: 12px;
+}
+
+.bmc-img {
+  height: 32px;
+  width: auto;
+  display: block;
+}
 
 /* ═══ GAME SCREEN ═══ */
 
@@ -245,26 +267,47 @@ html, body {
 .card-slot {
   width: 60px;
   height: 80px;
+  perspective: 400px;
+}
+
+.card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s ease-in-out;
+}
+
+.card-slot.flipped .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
   font-weight: 700;
-  transition: all 0.3s ease;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
-.card-slot.hidden {
-  background: rgba(0, 120, 255, 0.12);
-  border: 2px solid rgba(0, 120, 255, 0.3);
-  color: rgba(0, 120, 255, 0.5);
+.card-front {
+  background: rgba(10, 132, 255, 0.12);
+  border: 2px solid rgba(10, 132, 255, 0.3);
+  color: rgba(10, 132, 255, 0.5);
 }
 
-.card-slot.revealed {
+.card-back {
   background: #fff;
   border: 2px solid #fff;
   color: #000;
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 12px rgba(100, 210, 255, 0.3);
+  transform: rotateY(180deg);
 }
 
 /* Last Event */
@@ -295,8 +338,8 @@ html, body {
 
 .btn-bot {
   padding: 14px 12px;
-  background: rgba(0, 120, 255, 0.15);
-  border: 1px solid rgba(0, 120, 255, 0.25);
+  background: rgba(10, 132, 255, 0.3);
+  border: 1px solid rgba(10, 132, 255, 0.4);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 15px;
@@ -306,7 +349,7 @@ html, body {
   font-family: inherit;
 }
 
-.btn-bot:hover, .btn-bot:active { background: rgba(0, 120, 255, 0.25); }
+.btn-bot:hover, .btn-bot:active { background: rgba(10, 132, 255, 0.4); }
 .btn-bot:disabled {
   background: rgba(255,255,255,0.06);
   color: rgba(255,255,255,0.3);
@@ -359,16 +402,16 @@ html, body {
 }
 
 .btn-buy {
-  background: rgba(52, 199, 89, 0.2);
+  background: rgba(48, 209, 88, 0.2);
   color: var(--buy);
 }
-.btn-buy:hover { background: rgba(52, 199, 89, 0.3); }
+.btn-buy:hover { background: rgba(48, 209, 88, 0.3); }
 
 .btn-sell {
-  background: rgba(255, 59, 48, 0.2);
+  background: rgba(255, 69, 58, 0.2);
   color: var(--sell);
 }
-.btn-sell:hover { background: rgba(255, 59, 48, 0.3); }
+.btn-sell:hover { background: rgba(255, 69, 58, 0.3); }
 
 .btn-pass {
   background: rgba(255,255,255,0.08);
@@ -498,9 +541,11 @@ html, body {
   background: var(--buy);
   color: #fff;
   flex: 1;
+  opacity: 0.7;
 }
 
-.btn-next:hover { background: #2db84e; }
+.btn-next:hover { opacity: 0.85; }
+.btn-next:active { opacity: 0.5; }
 .btn-next:disabled { opacity: 0.3; cursor: default; }
 .btn-next.wind-down {
   background: #e67e22;
@@ -528,8 +573,8 @@ html, body {
 }
 
 .coach-bubble {
-  background: rgba(0, 212, 255, 0.12);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(100, 210, 255, 0.12);
+  border: 1px solid rgba(100, 210, 255, 0.3);
   border-radius: var(--radius);
   padding: 16px;
 }
@@ -541,7 +586,7 @@ html, body {
 }
 
 .btn-coach-tap {
-  background: rgba(0, 212, 255, 0.2);
+  background: rgba(100, 210, 255, 0.2);
   border: none;
   border-radius: var(--radius-sm);
   color: var(--accent);
@@ -597,11 +642,19 @@ html, body {
   margin-bottom: 8px;
 }
 
+/* Staggered card reveal animation */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .cards-dealt .card-row {
   display: flex;
   justify-content: space-between;
   padding: 6px 0;
   font-size: 14px;
+  opacity: 0;
+  animation: fadeSlideIn 0.3s ease-out forwards;
 }
 
 .card-row.you { color: var(--player); font-weight: 600; }
@@ -634,6 +687,34 @@ html, body {
 .lb-row .lb-score.zero { color: var(--text-secondary); }
 .lb-row .lb-winner { margin-left: 6px; }
 
+/* New Best badge */
+.lb-new-best {
+  font-size: 10px;
+  font-weight: 700;
+  color: #000;
+  background: var(--player);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+/* Personal best line */
+.personal-best {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Streak callout */
+.streak-callout {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--player);
+  padding: 4px 0;
+}
+
 .your-trades .trade-row {
   display: flex;
   justify-content: space-between;
@@ -644,8 +725,8 @@ html, body {
   font-size: 14px;
 }
 
-.trade-row.buy-trade { background: rgba(52, 199, 89, 0.06); }
-.trade-row.sell-trade { background: rgba(255, 59, 48, 0.06); }
+.trade-row.buy-trade { background: rgba(48, 209, 88, 0.06); }
+.trade-row.sell-trade { background: rgba(255, 69, 58, 0.06); }
 .trade-row .trade-desc { }
 .trade-row .trade-desc.buy { color: var(--buy); }
 .trade-row .trade-desc.sell { color: var(--sell); }
@@ -656,13 +737,177 @@ html, body {
 .trade-row .trade-pnl.positive { color: var(--buy); }
 .trade-row .trade-pnl.negative { color: var(--sell); }
 
+/* Share button */
+.btn-share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 8px;
+  margin: 8px auto 20px;
+}
+
+.btn-share:hover { opacity: 0.8; }
+
 .btn-play-again {
   width: 100%;
   background: var(--buy);
   color: #fff;
   margin-top: 16px;
+  opacity: 0.7;
 }
-.btn-play-again:hover { background: #2db84e; }
+.btn-play-again:hover { opacity: 0.85; }
+.btn-play-again:active { opacity: 0.5; }
+
+/* ═══ STATS SCREEN ═══ */
+
+.stats-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stats-panel {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  margin: 0 16px;
+  background: #1c1c1e;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.stats-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.stats-header .btn-icon {
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.stats-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.stats-picker {
+  display: flex;
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-bottom: 20px;
+}
+
+.stats-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: inherit;
+  transition: all var(--transition);
+}
+
+.stats-tab.active {
+  background: rgba(255,255,255,0.12);
+  color: var(--text);
+}
+
+.stats-content { }
+
+.stats-empty {
+  text-align: center;
+  padding: 40px 32px;
+}
+
+.stats-empty h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.stats-empty p {
+  font-size: 14px;
+  color: rgba(255,255,255,0.35);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: var(--radius);
+}
+
+.stat-card-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.stat-card-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.stat-card-subtitle {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.btn-reset-stats {
+  display: block;
+  margin: 24px auto;
+  background: none;
+  border: none;
+  color: rgba(255, 69, 58, 0.7);
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-reset-stats:hover { color: var(--sell); }
 
 /* ═══ TRADE LOG ═══ */
 
@@ -860,14 +1105,203 @@ html, body {
 .page-dot.active { background: var(--accent); }
 
 .btn-instructions-next {
-  background: rgba(0, 212, 255, 0.4);
+  background: rgba(100, 210, 255, 0.4);
   color: #fff;
   padding: 8px 20px;
   font-size: 14px;
 }
 
 .btn-instructions-next.final {
-  background: rgba(52, 199, 89, 0.5);
+  background: rgba(48, 209, 88, 0.5);
+}
+
+/* ── Instruction Page Visuals ─────────────────────────────────────────── */
+
+/* Page 1: Deck fan (8 mini cards) */
+.visual-fan {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-top: 12px;
+  margin-left: 16px;
+}
+
+.fan-card {
+  width: 28px;
+  height: 40px;
+  border-radius: 4px;
+  margin-left: -8px;
+  flex-shrink: 0;
+  transform-origin: bottom center;
+}
+
+.fan-blue {
+  background: rgba(10, 132, 255, 0.4);
+  border: 1px solid rgba(10, 132, 255, 0.6);
+}
+
+.fan-cyan {
+  background: rgba(100, 210, 255, 0.4);
+  border: 1px solid rgba(100, 210, 255, 0.6);
+}
+
+/* Page 2: Mock card */
+.visual-mock-card {
+  width: 70px;
+  height: 100px;
+  border-radius: 10px;
+  background: rgba(255, 214, 10, 0.12);
+  border: 1.5px solid rgba(255, 214, 10, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.visual-mock-card span {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--player);
+}
+
+/* Page 3: Mock quote */
+.visual-mock-quote {
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 12px;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 12px;
+}
+
+.mqh {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mq-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.mq-prices {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.mq-bid { color: var(--sell); font-weight: 700; }
+.mq-ask { color: var(--buy); font-weight: 700; }
+
+.mq-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.mq-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 0;
+  border-radius: 6px;
+}
+
+.mq-btn-buy {
+  background: rgba(48, 209, 88, 0.2);
+  color: var(--buy);
+}
+
+.mq-btn-sell {
+  background: rgba(255, 69, 58, 0.2);
+  color: var(--sell);
+}
+
+.mq-btn-pass {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-secondary);
+}
+
+/* Page 4: P&L examples */
+.visual-pnl {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pnl-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.7);
+}
+
+.pnl-green { background: rgba(48, 209, 88, 0.08); }
+.pnl-red { background: rgba(255, 69, 58, 0.08); }
+
+.pnl-arrow {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.pnl-val {
+  margin-left: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pnl-pos { color: var(--buy); }
+.pnl-neg { color: var(--sell); }
+
+/* Page 5: Mini central cards */
+.visual-mini-central {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mini-card {
+  width: 44px;
+  height: 60px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-up {
+  background: rgba(100, 210, 255, 0.15);
+  border: 1px solid rgba(100, 210, 255, 0.5);
+}
+
+.mini-up span {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.mini-down {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.mini-down span {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 /* ═══ UTILITY ═══ */
