@@ -1,6 +1,6 @@
 {
-  "name": "The Trading Game",
-  "short_name": "Trading Game",
+  "name": "MagCry",
+  "short_name": "MagCry",
   "description": "Trade contracts on the sum of hidden cards — based on Gary Stevenson's book",
   "start_url": ".",
   "display": "standalone",

@@ -1,5 +1,5 @@
 /**
- * tests.js — Browser test suite for the Trading Game web app.
+ * tests.js — Browser test suite for the MagCry web app.
  *
  * Ports all game-logic tests from the Python CLI test suite.
  * Zero dependencies — custom assertion helpers, DOM-based output.

@@ -1,5 +1,5 @@
 """
-display.py — Terminal output formatting for the Trading Game.
+display.py — Terminal output formatting for MagCry.
 Uses only stdlib (no external deps).
 
 V2 additions: difficulty banner, bot-asks-you prompts, adaptation warnings,

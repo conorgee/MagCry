@@ -1,5 +1,5 @@
 """
-Generate the Trading Game solver spreadsheet.
+Generate the MagCry solver spreadsheet.
 
 Pure Excel formulas — no macros. Open it during the game,
 fill in yellow cells, get instant EV/decision/inference output.

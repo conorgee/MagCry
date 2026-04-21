@@ -23,7 +23,6 @@ private fun scoreColor(score: Int): Color = when {
     else -> Color.Gray
 }
 
-private fun cardString(value: Int): String = if (value >= 0) "+$value" else "$value"
 
 @Composable
 fun SettlementScreen(vm: GameViewModel) {

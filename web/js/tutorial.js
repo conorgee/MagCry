@@ -47,7 +47,7 @@ export const TutorialStep = {
 const STEPS = [
   {
     id: TutorialStep.WELCOME,
-    message: "Welcome to the Trading Game! You'll trade contracts on the sum of 8 cards. Let's learn how it works.",
+    message: "Welcome to MagCry! You'll trade contracts on the sum of 8 cards. Let's learn how it works.",
     requiresTap: true,
     allowedBots: [],
     canBuy: false, canSell: false, canPass: false, canNext: false,

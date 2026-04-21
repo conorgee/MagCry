@@ -2,7 +2,7 @@
   <img src="swift/MagCry/Resources/logo.png" alt="MagCry logo" width="400">
 </p>
 
-# MagCry: The Trading Game
+# MagCry
 
 A card game based on [*The Trading Game*](https://www.amazon.com/Trading-Game-Confession-Gary-Stevenson/dp/0593727215) by Gary Stevenson. You play against 4 bots. Over 4 phases, central cards are revealed one at a time, and you trade contracts on what the sum of all 8 cards will be. The goal is to finish with the best P&L at settlement.
 

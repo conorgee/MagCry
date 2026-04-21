@@ -73,7 +73,7 @@ class Quote:
 
 @dataclass
 class GameState:
-    """Complete mutable state for one round of the Trading Game."""
+    """Complete mutable state for one round of MagCry."""
 
     # Players (ordered list; index 0 is always the human)
     player_ids: List[str]

@@ -1,5 +1,5 @@
 """
-main.py — The Trading Game CLI entry point (V2).
+main.py — MagCry CLI entry point (V2).
 
 Book-accurate "ask for a price" mechanic with bot adaptation.
 Trade freely, type 'next' to reveal the next central card.

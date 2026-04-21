@@ -80,7 +80,7 @@ export class Quote {
 }
 
 /**
- * Complete mutable state for one round of the Trading Game.
+ * Complete mutable state for one round of MagCry.
  */
 export class GameState {
   /**
