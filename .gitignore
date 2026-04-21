@@ -10,14 +10,16 @@ DerivedData/
 swift/build/
 
 # AI tool configs
-.claude/
-.opencode/
+**/.claude/
+**/.opencode/
 
 # Kotlin / Gradle
 kotlin/.gradle/
+kotlin/.kotlin/
 kotlin/build/
 kotlin/app/build/
 kotlin/gradle/wrapper/gradle-wrapper.jar
+kotlin/local.properties
 *.class
 
 # Excel temp/lock files
