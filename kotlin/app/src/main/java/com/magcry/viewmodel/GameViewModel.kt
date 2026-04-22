@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.magcry.model.*
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -28,6 +29,7 @@ class GameViewModel : ViewModel() {
         data object MainMenu : Screen()
         data object Playing : Screen()
         data object Settlement : Screen()
+        data object Stats : Screen()
     }
 
     sealed class PlayingState {
@@ -69,6 +71,9 @@ class GameViewModel : ViewModel() {
     /** Controls the History sheet presentation. */
     var showHistory: Boolean by mutableStateOf(false)
 
+    /** Show quit confirmation alert. */
+    var showQuitAlert: Boolean by mutableStateOf(false)
+
     // Log
     val log = mutableStateListOf<LogEntry>()
 
@@ -81,6 +86,11 @@ class GameViewModel : ViewModel() {
     // Tutorial
     var tutorialManager: TutorialManager? by mutableStateOf(null)
         private set
+    var isTutorial: Boolean by mutableStateOf(false)
+        private set
+
+    // Persistent stats
+    var scoreStore: ScoreStore? by mutableStateOf(null)
 
     // -- Private --
 
@@ -88,10 +98,21 @@ class GameViewModel : ViewModel() {
     private var quoteContinuation: CancellableContinuation<Quote>? = null
     private var nextContinuation: CancellableContinuation<Unit>? = null
     private var windDownContinuation: CancellableContinuation<Unit>? = null
+    private var gameJob: Job? = null
 
     companion object {
         const val HUMAN_ID = "You"
         val BOT_NAMES = listOf("Alice", "Bob", "Carol", "Dave")
+
+        // Tutorial constants
+        private val tutorialPrivateCards: Map<String, Int> = mapOf(
+            "You" to 12, "Alice" to 5, "Bob" to 8, "Carol" to 7, "Dave" to 6
+        )
+        private val tutorialCentralCards = listOf(10, 11, 9)
+        // Total = 12 + 5 + 8 + 7 + 6 + 10 + 11 + 9 = 68
+
+        private val tutorialAliceQuote = Quote(bid = 59, ask = 61)
+        private val tutorialBobQuote = Quote(bid = 70, ask = 72)
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -100,6 +121,7 @@ class GameViewModel : ViewModel() {
 
     fun startGame(diff: Difficulty) {
         tutorialManager = null
+        isTutorial = false
         difficulty = diff
         rng = GameRNG()
 
@@ -123,15 +145,45 @@ class GameViewModel : ViewModel() {
         log.clear()
         scores = emptyMap()
         finalTotal = 0
+        revealedCentralCards = emptyList()
 
         screen = Screen.Playing
 
-        viewModelScope.launch { runGame() }
+        // Launch the game loop
+        gameJob = viewModelScope.launch { runGame() }
     }
 
+    /** Start a scripted tutorial — fixed cards, fixed quotes, no randomness. */
     fun startTutorial() {
-        startGame(Difficulty.EASY)
+        isTutorial = true
+        difficulty = Difficulty.EASY
+        rng = GameRNG()
+
+        // Create simple bots (they won't actually be used for quotes, but needed for structure)
+        bots = makeBots(Difficulty.EASY, rng!!)
+        botMap = bots.associateBy { it.playerID }
+
+        // Fixed predetermined cards
+        val playerIDs = listOf(HUMAN_ID) + BOT_NAMES
+        gameState = GameState(
+            playerIDs = playerIDs,
+            privateCards = tutorialPrivateCards,
+            centralCards = tutorialCentralCards
+        )
+
+        playerCard = tutorialPrivateCards[HUMAN_ID]!!
+        activeQuote = null
+        lastActionResult = null
+        log.clear()
+        scores = emptyMap()
+        finalTotal = 0
+        revealedCentralCards = emptyList()
         tutorialManager = TutorialManager()
+
+        screen = Screen.Playing
+
+        // Launch the scripted tutorial loop
+        gameJob = viewModelScope.launch { runTutorial() }
     }
 
     private fun makeBots(diff: Difficulty, rng: GameRNG): List<Bot> = when (diff) {
@@ -143,6 +195,35 @@ class GameViewModel : ViewModel() {
             StrategicBot("Dave", rng.child()),
         )
         Difficulty.HARD -> BOT_NAMES.map { StrategicBot(it, rng.child()) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MARK: Quit Game
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Cancel the running game/tutorial and return to menu. */
+    fun quitGame() {
+        // Cancel the game job
+        gameJob?.cancel()
+        gameJob = null
+
+        // Resume any stuck continuations so they don't leak
+        quoteContinuation?.resume(Quote(bid = 0, ask = 2))
+        quoteContinuation = null
+        nextContinuation?.resume(Unit)
+        nextContinuation = null
+        windDownContinuation?.resume(Unit)
+        windDownContinuation = null
+
+        // Reset state
+        tutorialManager = null
+        isTutorial = false
+        gameState = null
+        activeQuote = null
+        lastActionResult = null
+        playingState = PlayingState.Idle
+
+        screen = Screen.MainMenu
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -163,14 +244,14 @@ class GameViewModel : ViewModel() {
                 if (revealIdx == state.revealedCentral.size) {
                     val card = state.centralCards[revealIdx]
                     state.revealedCentral.add(card)
+                    revealedCentralCards = state.revealedCentral.toList()
                     addLog(LogKind.CardReveal(revealIdx + 1, card))
 
+                    // Notify bots of phase change
                     for (bot in bots) {
                         bot.onPhaseChange(state)
                         bot.tracker.decayDirectShifts()
                     }
-
-                    tutorialManager?.advance(TutorialTrigger.PHASE_CHANGED)
                 }
             }
 
@@ -182,9 +263,20 @@ class GameViewModel : ViewModel() {
         state.phase = Phase.SETTLE
         finalTotal = state.finalTotal()
         scores = settle(state)
+
+        // Record stats (skip tutorials)
+        if (!isTutorial) {
+            val sorted = leaderboard(scores)
+            val pnl = scores[HUMAN_ID] ?: 0
+            val rank = (sorted.indexOfFirst { it.first == HUMAN_ID }.takeIf { it >= 0 } ?: sorted.size) + 1
+            val trades = state.trades.count { it.buyer == HUMAN_ID || it.seller == HUMAN_ID }
+            scoreStore?.record(difficulty = difficulty, pnl = pnl, rank = rank, tradeCount = trades)
+        }
+
         screen = Screen.Settlement
     }
 
+    /** Run one complete trading phase: bots ask -> human trades -> wind-down. */
     private suspend fun runPhase(state: GameState) {
         // Phase A: Bots ask human for prices (0-2)
         runBotsAskHuman(state, 0..2)
@@ -201,6 +293,7 @@ class GameViewModel : ViewModel() {
 
     // MARK: Phase A: Bots Ask Human
 
+    /** Some bots ask the human for a two-way price. Returns how many actually asked. */
     private suspend fun runBotsAskHuman(state: GameState, askRange: IntRange): Int {
         val nAskers = rng!!.nextInt(askRange)
         if (nAskers <= 0) return 0
@@ -210,31 +303,38 @@ class GameViewModel : ViewModel() {
         for (bot in askers) {
             addLog(LogKind.BotAsksYou(bot.playerID))
 
+            // Adaptation warning
             val streak = bot.tracker.opponentSameDirectionStreak(HUMAN_ID)
             val direction = bot.tracker.opponentDirection(HUMAN_ID)
             if (streak >= 3 && direction != "neutral") {
                 addLog(LogKind.Info("${bot.playerID} seems to have read your $direction pattern.", false))
             }
 
+            // Show slider — wait for user to submit a quote
             playingState = PlayingState.BotAsksYou(bot.playerID)
             val quote = awaitUserQuote()
 
+            // Bot evaluates the human's quote
             val decision = bot.decideOnQuote(state, HUMAN_ID, quote)
 
             if (decision != null) {
                 if (decision == "buy") {
+                    // Bot buys at ask
                     try {
                         executeTradeDirectly(state, bot.playerID, HUMAN_ID, quote.ask)
                         recordTradeForAllBots(bot.playerID, HUMAN_ID)
+                        // Bot bought from human -> human sold -> opponentBought=false
                         bot.tracker.recordDirectTrade(HUMAN_ID, opponentBought = false)
                         val msg = "buys at ${quote.ask}"
                         addLog(LogKind.BotBuys(bot.playerID, quote.ask))
                         playingState = PlayingState.BotDecided(bot.playerID, msg)
                     } catch (_: Exception) { }
                 } else {
+                    // Bot sells at bid
                     try {
                         executeTradeDirectly(state, HUMAN_ID, bot.playerID, quote.bid)
                         recordTradeForAllBots(HUMAN_ID, bot.playerID)
+                        // Bot sold to human -> human bought -> opponentBought=true
                         bot.tracker.recordDirectTrade(HUMAN_ID, opponentBought = true)
                         val msg = "sells at ${quote.bid}"
                         addLog(LogKind.BotSells(bot.playerID, quote.bid))
@@ -254,6 +354,7 @@ class GameViewModel : ViewModel() {
 
     // MARK: Wind-Down
 
+    /** After human taps "Next", 1-3 rounds of bot trading. Bots may still ask human. */
     private suspend fun runWindDown(state: GameState) {
         val nRounds = rng!!.nextInt(1..3)
         addLog(LogKind.Info("Wind-down: $nRounds round(s)...", false))
@@ -264,8 +365,10 @@ class GameViewModel : ViewModel() {
             playingState = PlayingState.BotsTrading
             shortDelay()
 
+            // Bot may ask human during wind-down (0-1)
             val nAsked = runBotsAskHuman(state, 0..1)
 
+            // If a bot asked, give human a mini trading window
             if (nAsked > 0) {
                 playingState = PlayingState.WindDownTurn
                 activeQuote = null
@@ -274,6 +377,7 @@ class GameViewModel : ViewModel() {
                 awaitWindDownContinue()
             }
 
+            // Bot-to-bot trading
             playingState = PlayingState.BotsTrading
             runBotToBot(state)
             shortDelay()
@@ -308,59 +412,161 @@ class GameViewModel : ViewModel() {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
+    // MARK: Scripted Tutorial Loop
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Runs the fully scripted tutorial across all 4 phases.
+     * No randomness, no wind-down, no bot-to-bot trading.
+     * Phase flow: Open -> Reveal1 -> Reveal2 (Carol asks you) -> Reveal3 -> Settlement.
+     */
+    private suspend fun runTutorial() {
+        val state = gameState ?: return
+
+        // -- Phase: Open Trading --
+        state.phase = Phase.OPEN
+        addLog(LogKind.PhaseChange(Phase.OPEN.label))
+        playingState = PlayingState.PlayerTurn
+        activeQuote = null
+        lastActionResult = null
+        // Coach steps: welcome -> seeCard -> askAlice -> aliceQuote ->
+        //              boughtResult -> canKeepTrading -> tapNext1 -> [Next tapped]
+        awaitPlayerNext()
+
+        // -- Phase: Reveal 1 (card 10) --
+        state.phase = Phase.REVEAL1
+        state.revealedCentral.add(state.centralCards[0])
+        revealedCentralCards = state.revealedCentral.toList()
+        addLog(LogKind.CardReveal(1, state.centralCards[0]))
+        addLog(LogKind.PhaseChange(Phase.REVEAL1.label))
+        playingState = PlayingState.PlayerTurn
+        activeQuote = null
+        lastActionResult = null
+        // Coach steps: cardRevealed1 -> askBob -> bobQuote ->
+        //              soldResult -> historyTip -> tapNext2 -> [Next tapped]
+        awaitPlayerNext()
+
+        // -- Phase: Reveal 2 (card 11) — Carol asks you --
+        state.phase = Phase.REVEAL2
+        state.revealedCentral.add(state.centralCards[1])
+        revealedCentralCards = state.revealedCentral.toList()
+        addLog(LogKind.CardReveal(2, state.centralCards[1]))
+        addLog(LogKind.PhaseChange(Phase.REVEAL2.label))
+
+        // Carol asks for a price — show slider immediately
+        addLog(LogKind.BotAsksYou("Carol"))
+        playingState = PlayingState.BotAsksYou("Carol")
+        // Coach step: botAsksYou ("Card 11 revealed! Carol wants YOUR price...")
+        awaitUserQuote()
+
+        // Carol walks away (always, for simplicity)
+        addLog(LogKind.BotWalks("Carol"))
+        playingState = PlayingState.BotDecided("Carol", "walks away")
+        delay(1500)
+
+        // Player turn for remaining coach steps
+        playingState = PlayingState.PlayerTurn
+        activeQuote = null
+        lastActionResult = null
+        // Coach steps: botAsksResult -> tapNext3 -> [Next tapped]
+        awaitPlayerNext()
+
+        // -- Phase: Reveal 3 (card 9) --
+        state.phase = Phase.REVEAL3
+        state.revealedCentral.add(state.centralCards[2])
+        revealedCentralCards = state.revealedCentral.toList()
+        addLog(LogKind.CardReveal(3, state.centralCards[2]))
+        addLog(LogKind.PhaseChange(Phase.REVEAL3.label))
+        playingState = PlayingState.PlayerTurn
+        activeQuote = null
+        lastActionResult = null
+        // Coach steps: cardRevealed3 -> tapNext4 -> [Next tapped]
+        awaitPlayerNext()
+
+        // -- Settlement --
+        state.phase = Phase.SETTLE
+        finalTotal = state.finalTotal()
+        scores = settle(state)
+        tutorialManager?.skip()
+        screen = Screen.Settlement
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
     // MARK: Player Actions (called by Views)
     // ═══════════════════════════════════════════════════════════════════════
 
+    /** Player asks a bot for a price. Shows single quote — one at a time. */
     fun askBot(botName: String) {
         val state = gameState ?: return
-        val bot = botMap[botName] ?: return
-        val quote = bot.getQuote(state, HUMAN_ID)
+
+        // In tutorial, use hardcoded quotes
+        val quote: Quote
+        if (isTutorial) {
+            quote = when (botName) {
+                "Alice" -> tutorialAliceQuote
+                "Bob" -> tutorialBobQuote
+                else -> return  // Only Alice and Bob are allowed in tutorial
+            }
+        } else {
+            val bot = botMap[botName] ?: return
+            quote = bot.getQuote(state, HUMAN_ID)
+        }
+
         activeQuote = Pair(botName, quote)
         lastActionResult = null
         addLog(LogKind.YourQuote(botName, quote.bid, quote.ask))
-        tutorialManager?.advance(TutorialTrigger.BOT_ASKED)
+        tutorialManager?.advance(TutorialTrigger.BotAsked(botName))
     }
 
+    /** Player buys from the currently quoted bot at their ask price. */
     fun buyFromActive() {
         val state = gameState ?: return
         val (botName, quote) = activeQuote ?: return
-        val bot = botMap[botName] ?: return
         try {
             executeTradeDirectly(state, HUMAN_ID, botName, quote.ask)
-            recordTradeForAllBots(HUMAN_ID, botName)
-            bot.tracker.recordDirectTrade(HUMAN_ID, opponentBought = true)
+            if (!isTutorial) {
+                recordTradeForAllBots(HUMAN_ID, botName)
+                botMap[botName]?.tracker?.recordDirectTrade(HUMAN_ID, opponentBought = true)
+            }
             addLog(LogKind.YourBuy(botName, quote.ask))
             showActionResult("Bought from $botName at ${quote.ask}")
-            tutorialManager?.advance(TutorialTrigger.QUOTE_ACTED_ON)
+            tutorialManager?.advance(TutorialTrigger.Bought)
         } catch (e: Exception) {
             addLog(LogKind.Info("Error: ${e.message}", false))
         }
     }
 
+    /** Player sells to the currently quoted bot at their bid price. */
     fun sellToActive() {
         val state = gameState ?: return
         val (botName, quote) = activeQuote ?: return
-        val bot = botMap[botName] ?: return
         try {
             executeTradeDirectly(state, botName, HUMAN_ID, quote.bid)
-            recordTradeForAllBots(botName, HUMAN_ID)
-            bot.tracker.recordDirectTrade(HUMAN_ID, opponentBought = false)
+            if (!isTutorial) {
+                recordTradeForAllBots(botName, HUMAN_ID)
+                botMap[botName]?.tracker?.recordDirectTrade(HUMAN_ID, opponentBought = false)
+            }
             addLog(LogKind.YourSell(botName, quote.bid))
             showActionResult("Sold to $botName at ${quote.bid}")
-            tutorialManager?.advance(TutorialTrigger.QUOTE_ACTED_ON)
+            tutorialManager?.advance(TutorialTrigger.Sold)
         } catch (e: Exception) {
             addLog(LogKind.Info("Error: ${e.message}", false))
         }
     }
 
+    /** Player passes on the current quote — clears it with a brief message. */
     fun passOnQuote() {
         val (botName, _) = activeQuote ?: return
-        botMap[botName]?.tracker?.recordPassWithMarketRead(HUMAN_ID)
+        if (!isTutorial) {
+            // Bot reads the player's recent trades with other bots (soft adjustment)
+            botMap[botName]?.tracker?.recordPassWithMarketRead(HUMAN_ID)
+        }
         addLog(LogKind.YourPass(botName))
         showActionResult("Passed")
-        tutorialManager?.advance(TutorialTrigger.QUOTE_ACTED_ON)
+        tutorialManager?.advance(TutorialTrigger.Passed)
     }
 
+    /** Show a brief result message, then auto-clear after a delay. */
     private fun showActionResult(message: String) {
         activeQuote = null
         lastActionResult = message
@@ -372,19 +578,23 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /** Player submits a quote when a bot asks (from slider). */
     fun submitQuote(quote: Quote) {
+        tutorialManager?.advance(TutorialTrigger.QuotedBot)
         quoteContinuation?.resume(quote)
         quoteContinuation = null
     }
 
+    /** Player taps "Next" to advance past the free trading phase. */
     fun playerTappedNext() {
         activeQuote = null
         lastActionResult = null
-        tutorialManager?.advance(TutorialTrigger.NEXT_TAPPED)
+        tutorialManager?.advance(TutorialTrigger.NextTapped)
         nextContinuation?.resume(Unit)
         nextContinuation = null
     }
 
+    /** Player taps "Continue" during wind-down mini trading window. */
     fun windDownContinue() {
         activeQuote = null
         lastActionResult = null
@@ -392,8 +602,20 @@ class GameViewModel : ViewModel() {
         windDownContinuation = null
     }
 
+    /** Return to main menu from settlement screen. */
     fun playAgain() {
         tutorialManager = null
+        isTutorial = false
+        screen = Screen.MainMenu
+    }
+
+    /** Navigate to stats screen. */
+    fun showStats() {
+        screen = Screen.Stats
+    }
+
+    /** Navigate back to main menu from stats. */
+    fun backToMenu() {
         screen = Screen.MainMenu
     }
 
@@ -417,6 +639,7 @@ class GameViewModel : ViewModel() {
     // MARK: Helpers
     // ═══════════════════════════════════════════════════════════════════════
 
+    /** Notify all bots about a trade so they update opponent tracking. */
     private fun recordTradeForAllBots(buyer: String, seller: String) {
         for (bot in bots) {
             bot.tracker.recordTrade(buyer, seller, buyer)
@@ -438,10 +661,12 @@ class GameViewModel : ViewModel() {
 
     val currentPhase: Phase get() = gameState?.phase ?: Phase.OPEN
 
-    val revealedCentralCards: List<Int> get() = gameState?.revealedCentral ?: emptyList()
+    var revealedCentralCards: List<Int> by mutableStateOf(emptyList())
+        private set
 
     val tradeCount: Int get() = gameState?.trades?.size ?: 0
 
+    /** Player's expected value based on known cards. */
     val playerEV: Double
         get() {
             val state = gameState ?: return 0.0
@@ -450,6 +675,7 @@ class GameViewModel : ViewModel() {
             return Deck.expectedTotal(known, unknown)
         }
 
+    /** Suggested slider range: EV +/- 25, clamped to reasonable deck bounds. */
     val suggestedBidRange: IntRange
         get() {
             val ev = Math.round(playerEV).toInt()
@@ -459,6 +685,7 @@ class GameViewModel : ViewModel() {
     val sortedScores: List<Pair<String, Int>>
         get() = leaderboard(scores)
 
+    /** All players' private cards + central cards, for the settlement reveal. */
     val allDealtCards: Pair<List<Pair<String, Int>>, List<Int>>
         get() {
             val state = gameState ?: return Pair(emptyList(), emptyList())
@@ -480,18 +707,62 @@ class GameViewModel : ViewModel() {
             Pair(bot.playerID, type)
         }
 
+    /** Most recent important log entry — shown as a status banner. */
     val lastEvent: String
         get() {
             lastActionResult?.let { return it }
             return log.lastOrNull { it.isImportant }?.displayText
-                ?: "Your turn -- ask a bot for a price"
+                ?: "Your turn -- ask a trader for a price"
         }
 
+    /** True when the player can freely ask/buy/sell (main turn or wind-down mini turn). */
     val isPlayerTurn: Boolean
         get() = playingState is PlayingState.PlayerTurn || playingState is PlayingState.WindDownTurn
 
+    /** True when the player is in a wind-down mini turn (shows "Continue" instead of "Next"). */
     val isWindDownTurn: Boolean
         get() = playingState is PlayingState.WindDownTurn
+
+    /** Player's rank in the current game (1 = best). Available after settlement. */
+    val playerRank: Int
+        get() {
+            val sorted = sortedScores
+            val idx = sorted.indexOfFirst { it.first == HUMAN_ID }
+            return if (idx >= 0) idx + 1 else 0
+        }
+
+    /** Player's P&L in the current game. Available after settlement. */
+    val playerPnL: Int
+        get() = scores[HUMAN_ID] ?: 0
+
+    /** Number of trades the player made in this game. */
+    val playerTradeCount: Int
+        get() = gameState?.trades?.count {
+            it.buyer == HUMAN_ID || it.seller == HUMAN_ID
+        } ?: 0
+
+    /** Text summary for sharing game results. */
+    val shareText: String
+        get() {
+            val pnlStr = if (playerPnL >= 0) "+$playerPnL" else "$playerPnL"
+            val rankSuffix = when (playerRank) {
+                1 -> "1st"
+                2 -> "2nd"
+                3 -> "3rd"
+                else -> "${playerRank}th"
+            }
+            return "MagCry [${difficulty.label}]\n" +
+                "P&L: $pnlStr ($rankSuffix place)\n" +
+                "Final total: $finalTotal | $playerTradeCount trades"
+        }
+
+    /** Personal best P&L for the current difficulty. */
+    val personalBest: Int?
+        get() = scoreStore?.statsFor(difficulty)?.bestPnL
+
+    /** Current win streak for the current difficulty. */
+    val currentStreak: Int
+        get() = scoreStore?.statsFor(difficulty)?.currentStreak ?: 0
 }
 
 // ═══════════════════════════════════════════════════════════════════════

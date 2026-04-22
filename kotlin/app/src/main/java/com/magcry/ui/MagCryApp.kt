@@ -6,13 +6,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
+import com.magcry.model.ScoreStore
 import com.magcry.ui.theme.MagCryTheme
 import com.magcry.viewmodel.GameViewModel
 import com.magcry.viewmodel.GameViewModel.Screen
 
 @Composable
-fun MagCryApp(vm: GameViewModel = viewModel()) {
+fun MagCryApp(vm: GameViewModel) {
+    val context = LocalContext.current
+
+    // Initialize ScoreStore if not yet set
+    if (vm.scoreStore == null) {
+        vm.scoreStore = ScoreStore.create(context)
+    }
+
     MagCryTheme {
         Box(
             modifier = Modifier
@@ -23,6 +31,11 @@ fun MagCryApp(vm: GameViewModel = viewModel()) {
                 Screen.MainMenu -> MainMenuScreen(vm)
                 Screen.Playing -> GameScreen(vm)
                 Screen.Settlement -> SettlementScreen(vm)
+                Screen.Stats -> {
+                    vm.scoreStore?.let { store ->
+                        StatsScreen(scoreStore = store, onDismiss = { vm.backToMenu() })
+                    }
+                }
             }
         }
     }

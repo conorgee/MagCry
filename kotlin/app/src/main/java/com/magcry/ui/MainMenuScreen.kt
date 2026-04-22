@@ -7,15 +7,18 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.magcry.R
@@ -27,86 +30,152 @@ import com.magcry.viewmodel.GameViewModel
 fun MainMenuScreen(vm: GameViewModel) {
     val context = LocalContext.current
     var showInstructions by remember { mutableStateOf(false) }
+    var showStats by remember { mutableStateOf(false) }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.weight(1f))
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.weight(1f))
 
-        Image(
-            painter = painterResource(R.drawable.logo),
-            contentDescription = "MagCry Logo",
-            modifier = Modifier.size(120.dp),
-        )
+            // Logo — crow artwork, seamless on black, fills width minus 40dp padding
+            Image(
+                painter = painterResource(R.drawable.logo),
+                contentDescription = "MagCry Logo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp)
+                    .aspectRatio(1536f / 650f)
+                    .background(Color.Black),
+            )
 
-        Spacer(Modifier.height(16.dp))
+            // Title
+            Text(
+                text = "MagCry",
+                color = Color.White,
+                fontSize = 38.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 8.dp, bottom = 36.dp)
+            )
 
-        Text(
-            text = "MagCry",
-            color = Color.White,
-            fontSize = 38.sp,
-            fontWeight = FontWeight.Bold,
-        )
+            // Difficulty buttons — outlined, no fill
+            Column(
+                modifier = Modifier.padding(horizontal = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                DifficultyButton(
+                    label = "Easy",
+                    color = Color(red = 0.2f, green = 0.7f, blue = 0.3f),
+                    onClick = { vm.startGame(Difficulty.EASY) }
+                )
+                DifficultyButton(
+                    label = "Medium",
+                    color = Color(red = 0.85f, green = 0.6f, blue = 0.15f),
+                    onClick = { vm.startGame(Difficulty.MEDIUM) }
+                )
+                DifficultyButton(
+                    label = "Hard",
+                    color = Color(red = 0.8f, green = 0.25f, blue = 0.25f),
+                    onClick = { vm.startGame(Difficulty.HARD) }
+                )
+            }
 
-        Spacer(Modifier.height(32.dp))
+            // How to Play
+            TextButton(
+                onClick = { showInstructions = true },
+                modifier = Modifier.padding(top = 24.dp)
+            ) {
+                Text(
+                    "How to Play",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp
+                )
+            }
 
-        DifficultyButton("Easy", Color(0xFF4CAF50)) { vm.startGame(Difficulty.EASY) }
-        Spacer(Modifier.height(12.dp))
-        DifficultyButton("Medium", Color(0xFFFF9800)) { vm.startGame(Difficulty.MEDIUM) }
-        Spacer(Modifier.height(12.dp))
-        DifficultyButton("Hard", Color(0xFFF44336)) { vm.startGame(Difficulty.HARD) }
+            // Tutorial
+            TextButton(
+                onClick = { vm.startTutorial() },
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text(
+                    "Tutorial",
+                    color = Color.Cyan.copy(alpha = 0.7f),
+                    fontSize = 14.sp
+                )
+            }
 
-        Spacer(Modifier.height(24.dp))
+            // Stats
+            TextButton(
+                onClick = { showStats = true },
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Text(
+                    "Stats",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp
+                )
+            }
 
-        TextButton(onClick = { showInstructions = true }) {
-            Text("How to Play", color = Color.White)
+            Spacer(Modifier.weight(1f))
+
+            // Attribution
+            Column(
+                modifier = Modifier.padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Based on",
+                    color = Color.White.copy(alpha = 0.3f),
+                    fontSize = 10.sp,
+                )
+                Text(
+                    text = "The Trading Game by Gary Stevenson",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 10.sp,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.amazon.com/Trading-Game-Confession-Gary-Stevenson/dp/0593727215"))
+                        )
+                    },
+                )
+                Image(
+                    painter = painterResource(R.drawable.bmc_button),
+                    contentDescription = "Buy me a coffee",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .height(32.dp)
+                        .clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/conorgee"))
+                            )
+                        },
+                )
+            }
         }
-
-        TextButton(onClick = { vm.startTutorial() }) {
-            Text("Tutorial", color = Color(0xFF00BCD4))
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Text(
-            text = "Based on",
-            color = Color.Gray,
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = "The Trading Game by Gary Stevenson",
-            color = Color(0xFF00BCD4),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.clickable {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.thetradinggame.co.uk")))
-            },
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        Image(
-            painter = painterResource(R.drawable.bmc_button),
-            contentDescription = "Buy me a coffee",
-            modifier = Modifier
-                .height(40.dp)
-                .clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/conorgee")))
-                },
-        )
-
-        Spacer(Modifier.height(16.dp))
     }
 
+    // Instructions bottom sheet
     if (showInstructions) {
         ModalBottomSheet(onDismissRequest = { showInstructions = false }) {
             InstructionsSheet(onDismiss = { showInstructions = false })
+        }
+    }
+
+    // Stats bottom sheet
+    if (showStats) {
+        ModalBottomSheet(onDismissRequest = { showStats = false }) {
+            vm.scoreStore?.let { store ->
+                StatsScreen(scoreStore = store, onDismiss = { showStats = false })
+            }
         }
     }
 }
@@ -115,10 +184,16 @@ fun MainMenuScreen(vm: GameViewModel) {
 private fun DifficultyButton(label: String, color: Color, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier.width(200.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
-        border = BorderStroke(1.dp, color),
+        border = BorderStroke(1.5.dp, color.copy(alpha = 0.6f)),
+        contentPadding = PaddingValues(vertical = 14.dp),
     ) {
-        Text(label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
