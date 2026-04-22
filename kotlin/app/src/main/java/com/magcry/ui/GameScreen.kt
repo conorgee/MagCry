@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.magcry.model.Difficulty
 import com.magcry.viewmodel.GameViewModel
 import com.magcry.viewmodel.GameViewModel.PlayingState
 
@@ -165,12 +166,14 @@ private fun GameHeader(vm: GameViewModel) {
                 fontSize = 14.sp
             )
             Spacer(Modifier.weight(1f))
-            Text(
-                text = "EV: ${"%.1f".format(vm.playerEV)}",
-                color = Color.Cyan,
-                fontSize = 14.sp,
-                fontFamily = FontFamily.Monospace
-            )
+            if (vm.difficulty == Difficulty.EASY || vm.isTutorial) {
+                Text(
+                    text = "EV: ${"%.1f".format(vm.playerEV)}",
+                    color = Color.Cyan,
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
     }
 }

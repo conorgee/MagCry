@@ -60,10 +60,12 @@ struct QuoteInputView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("EV: \(vm.playerEV, specifier: "%.0f")")
-                        .font(.caption2)
-                        .foregroundStyle(.cyan)
-                    Spacer()
+                    if vm.difficulty == .easy || isLocked {
+                        Text("EV: \(vm.playerEV, specifier: "%.0f")")
+                            .font(.caption2)
+                            .foregroundStyle(.cyan)
+                        Spacer()
+                    }
                     Text("\(vm.suggestedBidRange.upperBound)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)

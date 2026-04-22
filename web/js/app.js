@@ -501,6 +501,8 @@ class App {
   }
 
   _refreshEv(state) {
+    const showEv = this._difficulty === 'easy' || this.isTutorial;
+    if (!showEv) { $('your-ev').textContent = ''; return; }
     const known = state.knownCardsFor(HUMAN_ID);
     const unk = state.unknownCountFor(HUMAN_ID);
     $('your-ev').textContent = `EV: ${expectedTotal(known, unk).toFixed(1)}`;
@@ -527,7 +529,8 @@ class App {
         this._tState.unknownCountFor(HUMAN_ID),
       );
     }
-    $('slider-ev').textContent = `EV: ${ev.toFixed(0)}`;
+    const showEv = this._difficulty === 'easy' || this.isTutorial;
+    $('slider-ev').textContent = showEv ? `EV: ${ev.toFixed(0)}` : '';
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

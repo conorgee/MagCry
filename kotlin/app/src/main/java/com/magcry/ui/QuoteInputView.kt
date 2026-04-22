@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.magcry.model.Difficulty
 import com.magcry.model.Quote
 import com.magcry.viewmodel.GameViewModel
 import kotlin.math.roundToInt
@@ -122,11 +123,13 @@ fun QuoteInputView(
                     color = Color.Gray,
                     fontSize = 10.sp
                 )
-                Text(
-                    text = "EV: ${"%.0f".format(vm.playerEV)}",
-                    color = Color.Cyan,
-                    fontSize = 10.sp
-                )
+                if (vm.difficulty == Difficulty.EASY || isLocked) {
+                    Text(
+                        text = "EV: ${"%.0f".format(vm.playerEV)}",
+                        color = Color.Cyan,
+                        fontSize = 10.sp
+                    )
+                }
                 Text(
                     text = "${intRange.last}",
                     color = Color.Gray,

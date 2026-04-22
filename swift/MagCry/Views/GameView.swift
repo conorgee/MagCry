@@ -89,9 +89,11 @@ struct GameView: View {
                     .font(.subheadline)
                     .foregroundStyle(.yellow)
                 Spacer()
-                Text("EV: \(vm.playerEV, specifier: "%.1f")")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.cyan)
+                if vm.difficulty == .easy || vm.isTutorial {
+                    Text("EV: \(vm.playerEV, specifier: "%.1f")")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.cyan)
+                }
             }
         }
     }

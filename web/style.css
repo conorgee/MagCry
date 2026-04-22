@@ -53,16 +53,16 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
-  padding: 40px 24px;
-  gap: 16px;
+  padding: 0 24px;
   height: 100%;
 }
 
+/* Top spacer pushes content to center */
 .menu-logo {
+  margin-top: auto;
   width: 100%;
   max-width: 280px;
   padding: 0 40px;
@@ -87,13 +87,13 @@ html, body {
   flex-direction: column;
   gap: 14px;
   width: 100%;
-  max-width: 320px;
+  padding: 0 48px;
 }
 
 .btn-difficulty {
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 14px 24px;
   background: transparent;
   border-radius: var(--radius);
@@ -101,28 +101,24 @@ html, body {
   cursor: pointer;
   transition: background var(--transition);
   font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .btn-difficulty:hover, .btn-difficulty:active {
   background: var(--bg-card-hover);
 }
 
-.btn-easy { border-color: rgba(51,179,77,0.6); }
-.btn-easy .diff-name { color: var(--easy); font-size: 17px; font-weight: 600; }
-.btn-easy .diff-desc { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
-
-.btn-medium { border-color: rgba(217,153,38,0.6); }
-.btn-medium .diff-name { color: var(--medium); font-size: 17px; font-weight: 600; }
-.btn-medium .diff-desc { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
-
-.btn-hard { border-color: rgba(204,64,64,0.6); }
-.btn-hard .diff-name { color: var(--hard); font-size: 17px; font-weight: 600; }
-.btn-hard .diff-desc { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.btn-easy { border-color: rgba(51,179,77,0.6); color: var(--easy); }
+.btn-medium { border-color: rgba(217,153,38,0.6); color: var(--medium); }
+.btn-hard { border-color: rgba(204,64,64,0.6); color: var(--hard); }
 
 .menu-links {
   display: flex;
-  gap: 24px;
-  margin-top: 20px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin-top: 24px;
 }
 
 .btn-link {
@@ -132,8 +128,8 @@ html, body {
   font-size: 14px;
   cursor: pointer;
   font-family: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  padding: 4px 0;
+  text-decoration: none;
 }
 
 .btn-link:hover { color: rgba(255,255,255,0.8); }
